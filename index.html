@@ -216,12 +216,15 @@
 
             async _captureRecordStreams(streamStopCallback) {
                 try {
+                    let hasCaptureSystemAudio = false;
+                    let hasCaptureMicrophone = false;
                     let streams = [];
                     if (this._captures.screen) {
-                        const screen = await this._getDisplayMedia({ video: true });
+                        const screen = await this._getDisplayMedia({ video: true, audio: this._captures.systemAudio });
                         streams.screen = screen;
                         streams.isVideo = true;
                         streams.push(screen);
+                        hasCaptureSystemAudio = this._captures.systemAudio;
 
                         const keepStreamActive = document.createElement('video');
                         keepStreamActive.muted = true;
@@ -229,22 +232,23 @@
                         keepStreamActive.style.display = 'none';
                         (document.body || document.documentElement).appendChild(keepStreamActive);
                         this.onStop(() => {
-                            video.srcObject = null;
+                            keepStreamActive.srcObject = null;
                             (document.body || document.documentElement).removeChild(keepStreamActive);
                         })
                     }
-                    if (this._captures.systemAudio) {
+                    if (!hasCaptureSystemAudio && this._captures.systemAudio) {
                         const systemAudio = await this._getDisplayMedia({ audio: true });
                         streams.systemAudio = systemAudio;
                         streams.push(systemAudio);
                     }
                     if (this._captures.camera) {
-                        const camera = await this._getUserMedia({ video: true })
+                        const camera = await this._getUserMedia({ video: true, audio: this._captures.microphone })
                         streams.camera = camera
                         streams.isVideo = true
                         streams.push(camera);
+                        hasCaptureMicrophone = this._captures.microphone;
                     }
-                    if (this._captures.microphone) {
+                    if (!hasCaptureMicrophone && this._captures.microphone) {
                         const microphone = await this._getUserMedia({
                             audio: IsEdge() ? true : {
                                 echoCancellation: false
@@ -356,7 +360,7 @@
 
             _close() {
                 if (!this._recordStreams) return;
-                callStop = (obj) => {
+                const callStop = (obj) => {
                     if (obj && typeof obj.stop === 'function') {
                         obj.stop();
                     }
@@ -365,7 +369,7 @@
                 callStop(this._recordStreams.microphone);
                 callStop(this._recordStreams.screen);
                 callStop(this._recordStreams.systemAudio);
-                if (Array.isArray(recordStreams)) {
+                if (Array.isArray(this.recordStreams)) {
                     for (const stream of this._recordStreams) {
                         callStop(stream)
                     }
@@ -383,9 +387,10 @@
     <script>
         const app = new MediaRecorderApp({
             captures: {
-                camera: true,
-                microphone: true,
-                screen: true
+                //camera: true,
+                //microphone: true,
+                screen: true,
+                systemAudio: true,
             },
             selectors: {
                 start: '#btn-start-recording',
