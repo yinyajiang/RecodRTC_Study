@@ -13,6 +13,15 @@
     <button id="btn-pause-recording" disabled>Pause Recording</button>
     <button id="btn-resume-recording" disabled>Resume Recording</button>
     <button id="btn-download-recording" disabled>Download</button>
+    <button id="btn-reset">Reset</button>
+
+    <br /><br />
+
+    <input type="checkbox" id="checkbox-camera" checked> Camera</checkbox>
+    <input type="checkbox" id="checkbox-microphone"> Microphone</input>
+    <input type="checkbox" id="checkbox-screen">Screen</input>
+    <input type="checkbox" id="checkbox-system-audio"> System Audio</input>
+
 
     <hr>
     <div>
@@ -41,83 +50,60 @@
 
         class MediaRecorderApp {
             constructor(options) {
-                const captures = options.captures;
-                const selector = options.selectors;
-                const setQuerySelector = (btnname, selectorname, enable = null) => {
-                    if (btnname && selector && selectorname && selector[selectorname]) {
-                        this[btnname] = document.querySelector(selector[selectorname]);
-                        if (typeof enable === 'boolean') {
-                            this._enableBtn(this[btnname], enable);
-                        }
-                    }
-                }
-                setQuerySelector('_start_btn', 'start', true);
-                setQuerySelector('_stop_btn', 'stop', false);
-                setQuerySelector('_download_btn', 'download');
-                setQuerySelector('_pause_btn', 'pause', false)
-                setQuerySelector('_resume_btn', 'resume', false)
-                setQuerySelector('_videoRecordingPreview', 'videoRecordingPreview');
-                setQuerySelector('_videoFinishPreview', 'videoFinishPreview');
-                setQuerySelector('_audioFinishPreview', 'audioFinishPreview');
+                this._initUIListeners(options.events);
+            }
 
-
+            capture(captures) {
                 this._captures = captures;
-                if (typeof options.notAttachSelectorsListeners === 'boolean' && !options.notAttachSelectorsListeners) {
-                    if (this._start_btn) {
-                        this._start_btn.addEventListener('click', this.start.bind(this));
-                    }
-                    if (this._stop_btn) {
-                        this._stop_btn.addEventListener('click', this.stop.bind(this));
-                    }
-                    if (this._download_btn) {
-                        this._download_btn.addEventListener('click', this.download.bind(this));
-                    }
-                    if (this._pause_btn) {
-                        this._pause_btn.addEventListener('click', this.pause.bind(this));
-                    }
-                    if (this._resume_btn) {
-                        this._resume_btn.addEventListener('click', this.resume.bind(this));
-                    }
-                }
             }
 
             onStop(callback) {
-                if (!this._onStopCallbacks) this._onStopCallbacks = [];
-                this._onStopCallbacks.push(callback);
+                this._addUICallback('stop', callback);
             }
             onDownload(callback) {
-                if (!this._onDownloadCallbacks) this._onDownloadCallbacks = [];
-                this._onDownloadCallbacks.push(callback);
+                this._addUICallback('download', callback);
             }
             onStart(callback) {
-                if (!this._onStartCallbacks) this._onStartCallbacks = [];
-                this._onStartCallbacks.push(callback);
+                this._addUICallback('start', callback);
             }
             onPause(callback) {
-                if (!this._onPauseCallbacks) this._onPauseCallbacks = [];
-                this._onPauseCallbacks.push(callback);
+                this._addUICallback('pause', callback);
             }
             onResume(callback) {
-                if (!this._onResumeCallbacks) this._onResumeCallbacks = [];
-                this._onResumeCallbacks.push(callback);
+                this._addUICallback('resume', callback);
             }
+
+            reset() {
+                this._preview('videoRecordingPreview', null);
+                this._preview('videoFinishPreview', null);
+                this._preview('audioFinishPreview', null);
+                this._close(true);
+                this._enableEle('start', true);
+                this._enableEle('stop', false);
+                this._enableEle('download', false);
+                this._enableEle('pause', false);
+                this._enableEle('resume', false);
+                this._stop = false;
+                this._blobURL = null;
+            }
+
             async start() {
                 this._stop = false;
                 this._blobURL = null;
                 this._ext = "mp4"
                 this._close();
-                this._enableBtn(this._start_btn, false);
-                this._enableBtn(this._stop_btn, true);
-                this._enableBtn(this._download_btn, false);
-                this._enableBtn(this._pause_btn, true);
-                this._enableBtn(this._resume_btn, false);
+                this._enableEle('start', false);
+                this._enableEle('stop', true);
+                this._enableEle('download', false);
+                this._enableEle('pause', true);
+                this._enableEle('resume', false);
 
-                this._recordStreams = await this._captureRecordStreams(() => this.stop());
+                this._recordStreams = await this._captureRecordStreams(this._captures, () => this.stop());
 
-                let options = {};
+                let recordOptions = {};
                 if (this._recordStreams.isVideo) {
                     this._ext = "mp4"
-                    options = Object.assign(options, {
+                    recordOptions = Object.assign(recordOptions, {
                         type: 'video',
                         mimeType: 'video/mp4',
                     });
@@ -130,77 +116,206 @@
                         audioOptions.recorderType = StereoAudioRecorder;
                         audioOptions.numberOfAudioChannels = IsEdge() ? 1 : 2;
                     }
-                    options = Object.assign(options, audioOptions);
+                    recordOptions = Object.assign(recordOptions, audioOptions);
                 }
-
 
                 if (this._recordStreams.isVideo) {
-                    options.previewStream = (preview) => this._playSrc(this._videoRecordingPreview, preview, 0);
+                    recordOptions.previewStream = (preview) => this._preview('videoRecordingPreview', preview, 0);
                 }
-                if (this._onStartCallbacks) this._onStartCallbacks.forEach(callback => callback(this._recordStreams));
-                this._recorder = RecordRTC(this._recordStreams, options);
+                this._callback('start', this._recordStreams);
+                this._recorder = RecordRTC(this._recordStreams, recordOptions);
                 this._recorder.startRecording();
             }
 
             stop() {
                 if (this._stop) return;
                 this._stop = true;
+                if (!this._recorder) return;
                 this._recorder.stopRecording((blobURL) => {
                     const isVideo = this._recordStreams.isVideo;
                     this._blobURL = blobURL;
                     if (isVideo) {
-                        if (this._videoRecordingPreview) {
-                            this._videoRecordingPreview.src = this._videoRecordingPreview.srcObject = null;
-                            this._videoRecordingPreview.style.display = 'none';
-                        }
-                        this._playSrc(this._videoFinishPreview, this._blobURL, 1);
+                        this._preview('videoRecordingPreview', null);
+                        this._preview('videoFinishPreview', this._blobURL, 1);
                     } else {
-                        this._playSrc(this._audioFinishPreview, this._blobURL, 1);
+                        this._preview('audioFinishPreview', this._blobURL, 1);
                     }
-                    if (this._onStopCallbacks) {
-                        this._onStopCallbacks.forEach(callback => callback(isVideo, this._blobURL));
-                    }
+                    this._callback('stop', isVideo, this._blobURL);
                     this._close();
-                    this._enableBtn(this._start_btn, true);
-                    this._enableBtn(this._stop_btn, false);
-                    this._enableBtn(this._download_btn, true);
+                    this._enableEle('start', true);
+                    this._enableEle('stop', false);
+                    this._enableEle('download', true);
                 });
             }
 
             download() {
-                if (!this._blobURL) return;
-                this._saveURLToDisk(this._blobURL, this._ext);
-                if (this._onDownloadCallbacks) this._onDownloadCallbacks.forEach(callback => callback(this._blobURL));
+                if (this._blobURL) {
+                    this._saveURLToDisk(this._blobURL, this._ext);
+                    this._callback('download', this._blobURL);
+                }
             }
 
             pause() {
                 if (this._recorder) {
                     this._recorder.pauseRecording();
-                    this._enableBtn(this._pause_btn, false);
-                    this._enableBtn(this._resume_btn, true);
-                    if (this._onPauseCallbacks) this._onPauseCallbacks.forEach(callback => callback());
+                    this._enableEle('pause', false);
+                    this._enableEle('resume', true);
+                    this._callback('pause');
                 }
             }
 
             resume() {
                 if (this._recorder) {
                     this._recorder.resumeRecording();
-                    this._enableBtn(this._pause_btn, true);
-                    this._enableBtn(this._resume_btn, false);
-                    if (this._onResumeCallbacks) this._onResumeCallbacks.forEach(callback => callback());
+                    this._enableEle('pause', true);
+                    this._enableEle('resume', false);
+                    this._callback('resume');
                 }
             }
 
-            _enableBtn(btn, enable) {
-                if (btn) btn.disabled = !enable;
+
+
+            _initUIListeners(uis) {
+                this._uiListeners = {
+                    start: null,
+                    stop: null,
+                    download: null,
+                    pause: null,
+                    resume: null,
+                    videoPreview: null,
+                    videoFinishPreview: null,
+                    audioFinishPreview: null,
+
+                    cameraCheckbox: null,
+                    microphoneCheckbox: null,
+                    screenCheckbox: null,
+                    systemAudioCheckbox: null,
+                };
+                this._captures = {};
+                for (const ui in uis) {
+                    const obj = uis[ui];
+                    if (typeof obj === 'function') {
+                        this._addUICallback(ui, obj);
+                    } else if (typeof obj === 'string') {
+                        this._addUIEle(ui, obj);
+                    } else if (typeof obj === 'object') {
+                        this._addUICallback(ui, obj.callback);
+                        if (obj.hasOwnProperty('button')) {
+                            this._addUIEle(ui, obj.button);
+                        }
+                        if (obj.hasOwnProperty('selector')) {
+                            this._addUIEle(ui, obj.selector);
+                        }
+                        if (this._uiListeners[ui] && this._uiListeners[ui].ele && obj.hasOwnProperty('enable')) {
+                            this._uiListeners[ui].ele.disabled = !obj.enable;
+                        }
+                    }
+                    if (!this._uiListeners[ui]) {
+                        continue;
+                    }
+                    const ele = this._uiListeners[ui].ele;
+                    if (!ele) {
+                        continue;
+                    }
+                    switch (ui) {
+                        case 'start':
+                            ele.addEventListener('click', this.start.bind(this));
+                            break;
+                        case 'stop':
+                            ele.addEventListener('click', this.stop.bind(this));
+                            break;
+                        case 'download':
+                            ele.addEventListener('click', this.download.bind(this));
+                            break;
+                        case 'pause':
+                            ele.addEventListener('click', this.pause.bind(this));
+                            break;
+                        case 'resume':
+                            ele.addEventListener('click', this.resume.bind(this));
+                            break;
+                        case 'reset':
+                            ele.addEventListener('click', this.reset.bind(this));
+                            break;
+                        case 'cameraCheckbox':
+                            ele.addEventListener('change', () => {
+                                this._captures.camera = ele.checked;
+                            });
+                            this._captures.camera = ele.checked;
+                            break;
+                        case 'microphoneCheckbox':
+                            ele.addEventListener('change', () => {
+                                this._captures.microphone = ele.checked;
+                            });
+                            this._captures.microphone = ele.checked;
+                            break;
+                        case 'screenCheckbox':
+                            ele.addEventListener('change', () => {
+                                this._captures.screen = ele.checked;
+                            });
+                            this._captures.screen = ele.checked;
+                            break;
+
+                        case 'systemAudioCheckbox':
+                            ele.addEventListener('change', () => {
+                                this._captures.systemAudio = ele.checked;
+                            });
+                            this._captures.systemAudio = ele.checked;
+                            break;
+                    }
+                }
             }
 
-            _playSrc(ele, src, volume) {
+            _addUICallback(event, callback) {
+                if (!event || !callback) return;
+                if (!this._uiListeners[event]) {
+                    this._uiListeners[event] = {
+                        callbacks: []
+                    }
+                }
+                if (!this._uiListeners[event].callbacks) {
+                    this._uiListeners[event].callbacks = [];
+                }
+                this._uiListeners[event].callbacks.push(callback);
+            }
+
+            _addUIEle(event, ele) {
+                if (!event || !ele) return;
+                if (!this._uiListeners[event]) {
+                    this._uiListeners[event] = {}
+                }
+                if (typeof ele === 'string') {
+                    ele = document.querySelector(ele);
+                }
+                this._uiListeners[event].ele = ele;
+            }
+
+            _callback(event, ...args) {
+                const listener = this._uiListeners[event];
+                if (listener && listener.callbacks) {
+                    listener.callbacks.forEach(callback => callback(...args));
+                }
+            }
+
+            _enableEle(btn, enable) {
+                if (typeof btn === 'string') {
+                    btn = this._uiListeners[btn].ele;
+                }
+                if (btn) {
+                    btn.disabled = !enable;
+                }
+            }
+
+            _preview(ele, src, volume) {
                 if (!ele) return;
+                if (typeof ele === 'string') {
+                    ele = this._uiListeners[ele].ele;
+                }
+                ele.src = ele.srcObject = null;
+                if (!src) return;
+
                 if (ele.style.display === 'none') {
                     ele.style.display = 'block';
                 }
-                ele.src = this._videoRecordingPreview.srcObject = null;
                 if (volume) {
                     ele.muted = false;
                     ele.volume = volume;
@@ -214,17 +329,17 @@
                 }
             }
 
-            async _captureRecordStreams(streamStopCallback) {
+            async _captureRecordStreams(captures, streamStopCallback) {
                 try {
                     let hasCaptureSystemAudio = false;
                     let hasCaptureMicrophone = false;
                     let streams = [];
-                    if (this._captures.screen) {
-                        const screen = await this._getDisplayMedia({ video: true, audio: this._captures.systemAudio });
+                    if (captures.screen) {
+                        const screen = await this._getDisplayMedia({ video: true, audio: captures.systemAudio });
                         streams.screen = screen;
                         streams.isVideo = true;
                         streams.push(screen);
-                        hasCaptureSystemAudio = this._captures.systemAudio;
+                        hasCaptureSystemAudio = captures.systemAudio;
 
                         const keepStreamActive = document.createElement('video');
                         keepStreamActive.muted = true;
@@ -236,24 +351,20 @@
                             (document.body || document.documentElement).removeChild(keepStreamActive);
                         })
                     }
-                    if (!hasCaptureSystemAudio && this._captures.systemAudio) {
+                    if (!hasCaptureSystemAudio && captures.systemAudio) {
                         const systemAudio = await this._getDisplayMedia({ audio: true });
                         streams.systemAudio = systemAudio;
                         streams.push(systemAudio);
                     }
-                    if (this._captures.camera) {
-                        const camera = await this._getUserMedia({ video: true, audio: this._captures.microphone })
+                    if (captures.camera) {
+                        const camera = await this._getUserMedia({ video: true, audio: captures.microphone })
                         streams.camera = camera
                         streams.isVideo = true
                         streams.push(camera);
-                        hasCaptureMicrophone = this._captures.microphone;
+                        hasCaptureMicrophone = captures.microphone;
                     }
-                    if (!hasCaptureMicrophone && this._captures.microphone) {
-                        const microphone = await this._getUserMedia({
-                            audio: IsEdge() ? true : {
-                                echoCancellation: false
-                            }
-                        })
+                    if (!hasCaptureMicrophone && captures.microphone) {
+                        const microphone = await this._getUserMedia({ audio: true })
                         streams.microphone = microphone
                         streams.push(microphone);
                     }
@@ -358,7 +469,7 @@
                 }
             }
 
-            _close() {
+            _close(reset) {
                 if (!this._recordStreams) return;
                 const callStop = (obj) => {
                     if (obj && typeof obj.stop === 'function') {
@@ -376,6 +487,9 @@
                     callStop(this._recordStreams);
                     this._recordStreams = null;
                 }
+                if (reset && this._recorder) {
+                    this._recorder.reset();
+                }
                 if (this._recorder) {
                     this._recorder.destroy();
                     this._recorder = null;
@@ -386,23 +500,23 @@
 
     <script>
         const app = new MediaRecorderApp({
-            captures: {
-                //camera: true,
-                //microphone: true,
-                screen: true,
-                systemAudio: true,
-            },
-            selectors: {
+            events: {
                 start: '#btn-start-recording',
                 stop: '#btn-stop-recording',
                 pause: '#btn-pause-recording',
                 resume: '#btn-resume-recording',
                 download: '#btn-download-recording',
+                reset: '#btn-reset',
                 videoRecordingPreview: 'video',
                 videoFinishPreview: 'video',
-                audioFinishPreview: 'audio'
-            },
-            notAttachSelectorsListeners: false
+                audioFinishPreview: 'audio',
+
+                cameraCheckbox: '#checkbox-camera',
+                microphoneCheckbox: '#checkbox-microphone',
+                screenCheckbox: '#checkbox-screen',
+                systemAudioCheckbox: '#checkbox-system-audio',
+
+            }
         });
     </script>
 </body>
