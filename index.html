@@ -8,6 +8,8 @@
 </head>
 
 <body>
+    <div id="tip"></div>
+
     <button id="btn-start-recording">Start Recording</button>
     <button id="btn-stop-recording" disabled>Stop Recording</button>
     <button id="btn-pause-recording" disabled>Pause Recording</button>
@@ -21,7 +23,7 @@
     <input type="checkbox" id="checkbox-microphone"> Microphone</input>
     <input type="checkbox" id="checkbox-screen">Screen</input>
     <input type="checkbox" id="checkbox-system-audio"> System Audio</input>
-
+    <input type="checkbox" id="checkbox-speaking"> 监听声音</input>
 
     <hr>
     <div>
@@ -65,34 +67,35 @@
             onResume(callback) {
                 this._addHook('resume', callback);
             }
-            onSpeaking(callback) {
-
-                this._addHook('speaking', callback);
+            onReset(callback) {
+                this._addHook('reset', callback);
             }
-            onStopSpeaking(callback, timeoutSeconds) {
-                this._stopSpeakingTimeoutSeconds = timeoutSeconds || 3;
-                this._addHook('stopSpeaking', callback);
+            onPreStart(callback) {
+                this._addHook('prestart', callback);
             }
 
             reset() {
+                this._callback('reset');
                 this._stop = false;
                 this._blobURL = null;
                 this._close(true);
             }
 
-            async start(captures) {
+            async start({ captures }) {
                 this._stop = false;
                 this._blobURL = null;
                 this._close();
-                this._ext = "mp4"
+                this._ext = "webm"
+
+                this._callback('prestart', captures);
 
                 this._recordStreams = await this._captureRecordStreams(captures, () => this.stop());
                 let recordOptions = {};
                 if (this._recordStreams.isVideo) {
-                    this._ext = "mp4"
+                    this._ext = "webm"
                     recordOptions = Object.assign(recordOptions, {
                         type: 'video',
-                        mimeType: 'video/mp4',
+                        mimeType: 'video/webm',
                     });
                 } else {
                     this._ext = "mp3"
@@ -106,34 +109,11 @@
                     recordOptions = Object.assign(recordOptions, audioOptions);
                 }
 
-                if (this._recordStreams.isVideo) {
-                    recordOptions.previewStream = (preview) => {
-                        this._callback('start', this._recordStreams, preview);
-                    };
-                } else {
-                    this._callback('start', this._recordStreams);
-                }
+                recordOptions.previewStream = (preview) => {
+                    this._callback('start', this._recordStreams, preview);
+                };
                 this._recorder = RecordRTC(this._recordStreams, recordOptions);
                 this._recorder.startRecording();
-
-                if (this._hasHook('speaking') && this._hasHook('stopSpeaking') && this._recordStreams.microphone) {
-                    var stopped_speaking_timeout;
-                    this._hark = hark(this._recordStreams.microphone, {});
-                    this._hark.on('speaking', () => {
-                        if (stopped_speaking_timeout) {
-                            clearTimeout(stopped_speaking_timeout);
-                            stopped_speaking_timeout = 0
-                        }
-                        if (app.state() === 'paused') {
-                            this._callback('speaking');
-                        }
-                    });
-                    this._hark.on('stopped_speaking', () => {
-                        stopped_speaking_timeout = setTimeout(() => {
-                            this._callback('stopSpeaking');
-                        }, this._stopSpeakingTimeoutSeconds * 1000);
-                    });
-                }
             }
 
             stop() {
@@ -229,8 +209,8 @@
                     if (captures.camera) {
                         const camera = await this._getUserMedia({ video: true, audio: captures.microphone })
                         streams.camera = camera;
-                        streams.microphone = captures.microphone;
                         streams.isVideo = true;
+                        streams.microphone = captures.microphone;
                         streams.push(camera);
                     }
                     if (!streams.microphone && captures.microphone) {
@@ -362,13 +342,58 @@
                 if (this._recorder) {
                     this._recorder.destroy();
                 }
-                if (this._hark) {
-                    this._hark.stop()
-                }
                 this._recordStreams = null;
                 this._recorder = null;
-                this._hark = null;
             };
+        }
+
+
+        class SpeakingListener {
+            listen({ stream, timeoutSeconds }) {
+                this._timeoutHandle;
+                this._hark = hark(stream, {});
+                this._hark.on('speaking', () => {
+                    if (this._timeoutHandle) {
+                        clearTimeout(this._timeoutHandle);
+                        this._timeoutHandle = null;
+                    }
+                    if (this._speakingHooks) {
+                        this._speakingHooks.forEach(callback => callback());
+                    }
+                });
+                this._hark.on('stopped_speaking', () => {
+                    this._timeoutHandle = setTimeout(() => {
+                        if (this._stopSpeakingHooks) {
+                            this._stopSpeakingHooks.forEach(callback => callback());
+                        }
+                    }, timeoutSeconds * 1000);
+                });
+            }
+
+            stop() {
+                if (this._hark) {
+                    this._hark.stop();
+                    this._hark = null;
+                }
+                if (this._timeoutHandle) {
+                    clearTimeout(this._timeoutHandle);
+                    this._timeoutHandle = null;
+                }
+            }
+            onSpeaking(callback) {
+                if (this._speakingHooks) {
+                    this._speakingHooks.push(callback);
+                } else {
+                    this._speakingHooks = [callback];
+                }
+            }
+            onStopSpeaking(callback) {
+                if (this._stopSpeakingHooks) {
+                    this._stopSpeakingHooks.push(callback);
+                } else {
+                    this._stopSpeakingHooks = [callback];
+                }
+            }
         }
     </script>
 
@@ -386,6 +411,8 @@
         const systemAudioCheckbox = document.querySelector('#checkbox-system-audio');
         const videoPreview = document.querySelector('video');
         const audioPreview = document.querySelector('audio');
+        const speakingCheckBok = document.querySelector('#checkbox-speaking');
+        const tip = document.querySelector('#tip');
 
         function enableEle(...eles) {
             eles.forEach(ele => ele.disabled = false);
@@ -394,13 +421,45 @@
             eles.forEach(ele => ele.disabled = true);
         }
 
-        let app;
-        function initApp() {
+        function createApp() {
+            let isVideoPlaying = false;
+            videoPreview.onplaying = function () {
+                isVideoPlaying = true;
+            };
+            videoPreview.onpause = function () {
+                isVideoPlaying = false;
+            };
+            videoPreview.onended = function () {
+                isVideoPlaying = false;
+            };
+            let isAudioPlaying = false;
+            audioPreview.onplaying = function () {
+                isAudioPlaying = true;
+            };
+            audioPreview.onpause = function () {
+                isAudioPlaying = false;
+            };
+            audioPreview.onended = function () {
+                isAudioPlaying = false;
+            };
 
+            let app;
+            let speakingListen = new SpeakingListener()
             app = new MediaRecorderApp();
+            app.onPreStart(() => {
+                tip.innerHTML = 'Preparing...';
+            })
             app.onStart((recordStreams, preview) => {
                 disableEle(startBtn, downloadBtn, resumeBtn);
                 enableEle(stopBtn, pauseBtn, resetBtn);
+
+                if (speakingCheckBok.checked && recordStreams.microphone) {
+                    speakingListen.listen({
+                        stream: preview,
+                        timeoutSeconds: 3,
+                    })
+                }
+
                 if (recordStreams.isVideo && preview) {
                     videoPreview.style.display = 'block';
                     videoPreview.src = null;
@@ -409,12 +468,17 @@
                 }
             })
             app.onStop((isVideo, blobURL) => {
+                speakingListen.stop()
+
                 disableEle(startBtn, stopBtn, pauseBtn, resumeBtn);
                 enableEle(resetBtn, downloadBtn);
                 if (isVideo) {
+                    videoPreview.src = videoPreview.srcObject = null;
                     videoPreview.src = blobURL;
                     videoPreview.muted = false;
+                    videoPreview.load();
                 } else {
+                    audioPreview.src = audioPreview.srcObject = null;
                     audioPreview.src = blobURL;
                     audioPreview.muted = false;
                 }
@@ -422,64 +486,66 @@
             app.onPause(() => {
                 disableEle(startBtn, pauseBtn, downloadBtn);
                 enableEle(stopBtn, resumeBtn, resetBtn);
-                if (videoPreview.played) {
+                if (videoPreview.played && isVideoPlaying) {
                     videoPreview.pause();
                 }
             })
             app.onResume(() => {
                 disableEle(startBtn, resumeBtn, downloadBtn);
                 enableEle(stopBtn, pauseBtn, resetBtn);
-                if (videoPreview.paused) {
+                if (videoPreview.paused && !isVideoPlaying) {
                     videoPreview.play();
                 }
             })
-            app.onSpeaking(() => {
+            app.onDownload(() => { })
+            app.onReset(() => {
+                speakingListen.stop();
+
+                enableEle(startBtn);
+                disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, resetBtn);
+                videoPreview.src = videoPreview.srcObject = null;
+                audioPreview.src = audioPreview.srcObject = null;
+                videoPreview.load();
+                audioPreview.load();
+            })
+
+
+            speakingListen.onSpeaking(() => {
+                console.debug('speaking');
                 if (!resumeBtn.disabled) {
                     resumeBtn.click();
                 }
             })
-            app.onStopSpeaking(() => {
+            speakingListen.onStopSpeaking(() => {
+                console.debug('stop speaking');
                 if (!pauseBtn.disabled) {
                     pauseBtn.click();
                 }
             })
-            app.onDownload(() => { })
+
+            return app;
         }
-
-
-        startBtn.addEventListener('click', async () => {
-            initApp();
-            await app.start({
-                camera: cameraCheckbox.checked,
-                microphone: microphoneCheckbox.checked,
-                screen: screenCheckbox.checked,
-                systemAudio: systemAudioCheckbox.checked,
-            });
-        });
-        stopBtn.addEventListener('click', () => {
-            app.stop();
-        });
-        pauseBtn.addEventListener('click', () => {
-            app.pause();
-        });
-        resumeBtn.addEventListener('click', () => {
-            app.resume();
-        });
-        downloadBtn.addEventListener('click', () => {
-            app.download();
-        });
-        resetBtn.addEventListener('click', () => {
-            if (app) app.reset();
-            enableEle(startBtn);
-            disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, resetBtn);
-            videoPreview.src = videoPreview.srcObject = null;
-            audioPreview.src = audioPreview.srcObject = null;
-            videoPreview.load();
-            audioPreview.load();
-        });
 
         enableEle(startBtn);
         disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, resetBtn);
+
+        let globalApp;
+        startBtn.addEventListener('click', async () => {
+            globalApp = createApp();
+            await globalApp.start({
+                captures: {
+                    camera: cameraCheckbox.checked,
+                    microphone: microphoneCheckbox.checked,
+                    screen: screenCheckbox.checked,
+                    systemAudio: systemAudioCheckbox.checked,
+                },
+            });
+        });
+        stopBtn.addEventListener('click', () => globalApp.stop());
+        pauseBtn.addEventListener('click', () => globalApp.pause());
+        resumeBtn.addEventListener('click', () => globalApp.resume());
+        downloadBtn.addEventListener('click', () => globalApp.download());
+        resetBtn.addEventListener('click', () => globalApp.reset());
     </script>
 </body>
 
