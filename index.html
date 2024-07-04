@@ -30,6 +30,7 @@
     </div>
 
     <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
+    <script src="https://www.webrtc-experiment.com/hark.js"></script>
 
     <script> //utils
         function IsEdge() {
@@ -64,6 +65,14 @@
             onResume(callback) {
                 this._addHook('resume', callback);
             }
+            onSpeaking(callback) {
+
+                this._addHook('speaking', callback);
+            }
+            onStopSpeaking(callback, timeoutSeconds) {
+                this._stopSpeakingTimeoutSeconds = timeoutSeconds || 3;
+                this._addHook('stopSpeaking', callback);
+            }
 
             reset() {
                 this._stop = false;
@@ -96,6 +105,7 @@
                     }
                     recordOptions = Object.assign(recordOptions, audioOptions);
                 }
+
                 if (this._recordStreams.isVideo) {
                     recordOptions.previewStream = (preview) => {
                         this._callback('start', this._recordStreams, preview);
@@ -105,6 +115,25 @@
                 }
                 this._recorder = RecordRTC(this._recordStreams, recordOptions);
                 this._recorder.startRecording();
+
+                if (this._hasHook('speaking') && this._hasHook('stopSpeaking') && this._recordStreams.microphone) {
+                    var stopped_speaking_timeout;
+                    this._hark = hark(this._recordStreams.microphone, {});
+                    this._hark.on('speaking', () => {
+                        if (stopped_speaking_timeout) {
+                            clearTimeout(stopped_speaking_timeout);
+                            stopped_speaking_timeout = 0
+                        }
+                        if (app.state() === 'paused') {
+                            this._callback('speaking');
+                        }
+                    });
+                    this._hark.on('stopped_speaking', () => {
+                        stopped_speaking_timeout = setTimeout(() => {
+                            this._callback('stopSpeaking');
+                        }, this._stopSpeakingTimeoutSeconds * 1000);
+                    });
+                }
             }
 
             stop() {
@@ -133,6 +162,14 @@
                 }
             }
 
+            state() {
+                return this._recorder.getState();
+            }
+
+            blog() {
+                return this._recorder.getBlob();
+            }
+
             resume() {
                 if (this._recorder) {
                     this._recorder.resumeRecording();
@@ -151,6 +188,11 @@
                 this._hooks[event].push(callback);
             }
 
+            _hasHook(event) {
+                if (!event || !this._hooks) return false;
+                return !!this._hooks[event];
+            }
+
             _callback(event, ...args) {
                 if (!event || !this._hooks) return;
                 const callbacks = this._hooks[event];
@@ -161,15 +203,13 @@
 
             async _captureRecordStreams(captures, streamStopCallback) {
                 try {
-                    let hasCaptureSystemAudio = false;
-                    let hasCaptureMicrophone = false;
                     let streams = [];
                     if (captures.screen) {
                         const screen = await this._getDisplayMedia({ video: true, audio: captures.systemAudio });
                         streams.screen = screen;
                         streams.isVideo = true;
+                        streams.systemAudio = captures.systemAudio;
                         streams.push(screen);
-                        hasCaptureSystemAudio = captures.systemAudio;
 
                         const keepStreamActive = document.createElement('video');
                         keepStreamActive.muted = true;
@@ -181,19 +221,19 @@
                             (document.body || document.documentElement).removeChild(keepStreamActive);
                         })
                     }
-                    if (!hasCaptureSystemAudio && captures.systemAudio) {
+                    if (!streams.systemAudio && captures.systemAudio) {
                         const systemAudio = await this._getDisplayMedia({ audio: true });
                         streams.systemAudio = systemAudio;
                         streams.push(systemAudio);
                     }
                     if (captures.camera) {
                         const camera = await this._getUserMedia({ video: true, audio: captures.microphone })
-                        streams.camera = camera
-                        streams.isVideo = true
+                        streams.camera = camera;
+                        streams.microphone = captures.microphone;
+                        streams.isVideo = true;
                         streams.push(camera);
-                        hasCaptureMicrophone = captures.microphone;
                     }
-                    if (!hasCaptureMicrophone && captures.microphone) {
+                    if (!streams.microphone && captures.microphone) {
                         const microphone = await this._getUserMedia({ audio: true })
                         streams.microphone = microphone
                         streams.push(microphone);
@@ -322,8 +362,12 @@
                 if (this._recorder) {
                     this._recorder.destroy();
                 }
+                if (this._hark) {
+                    this._hark.stop()
+                }
                 this._recordStreams = null;
                 this._recorder = null;
+                this._hark = null;
             };
         }
     </script>
@@ -387,6 +431,16 @@
                 enableEle(stopBtn, pauseBtn, resetBtn);
                 if (videoPreview.paused) {
                     videoPreview.play();
+                }
+            })
+            app.onSpeaking(() => {
+                if (!resumeBtn.disabled) {
+                    resumeBtn.click();
+                }
+            })
+            app.onStopSpeaking(() => {
+                if (!pauseBtn.disabled) {
+                    pauseBtn.click();
                 }
             })
             app.onDownload(() => { })
