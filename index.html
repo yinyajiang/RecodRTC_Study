@@ -481,6 +481,7 @@
                     audioPreview.src = audioPreview.srcObject = null;
                     audioPreview.src = blobURL;
                     audioPreview.muted = false;
+                    audioPreview.load();
                 }
             })
             app.onPause(() => {
