@@ -70,15 +70,25 @@
             onDiscard(callback) {
                 this._addHook('discard', callback);
             }
-            onPreStart(callback) {
-                this._addHook('prestart', callback);
+            onCaptureBefore(callback) {
+                this._addHook('capturebefore', callback);
+            }
+            onCaptureAfter(callback) {
+                this._addHook('captureafter', callback);
+            }
+            onCaptureError(callback) {
+                this._addHook('captureerror', callback);
             }
 
             discard() {
+                this.clean(true);
+                this._callback('discard');
+            }
+
+            clean(reset) {
                 this._stop = false;
                 this._blobURL = null;
-                this._close(true);
-                this._callback('discard');
+                this._close(reset);
             }
 
             async start({ captures }) {
@@ -86,15 +96,13 @@
                     console.log('Please select at least one media source to record.');
                     return;
                 }
+                this.clean(true);
 
-                this._stop = false;
-                this._blobURL = null;
-                this._close();
                 this._ext = "webm"
-
-                this._callback('prestart', captures);
-
+                this._callback('capturebefore', captures);
                 this._recordStreams = await this._captureRecordStreams(captures, () => this.stop());
+                this._callback('captureafter', this._recordStreams);
+
                 let recordOptions = {};
                 if (this._recordStreams.isVideo) {
                     this._ext = "webm"
@@ -118,6 +126,8 @@
                     this._callback('start', this._recordStreams, preview);
                 };
                 this._recorder = RecordRTC(this._recordStreams, recordOptions);
+
+
                 this._recorder.startRecording();
             }
 
@@ -212,7 +222,7 @@
                         streams.push(systemAudio);
                     }
                     if (captures.camera) {
-                        const camera = await this._getUserMedia({ video: true, audio: captures.microphone })
+                        const camera = await this._getUserMedia({ video: true, audio: captures.microphone });
                         streams.camera = camera;
                         streams.isVideo = true;
                         streams.microphone = captures.microphone;
@@ -229,6 +239,12 @@
                         streams.screen.fullcanvas = true;
                         streams.camera.width = 320;
                         streams.camera.height = 240;
+                        if (streams.camera.width > streams.screen.width / 3) {
+                            streams.camera.width = streams.screen.width / 3;
+                        }
+                        if (streams.camera.height > streams.screen.height / 3) {
+                            streams.camera.height = streams.screen.height / 3;
+                        }
                         streams.camera.top = streams.screen.height - streams.camera.height;
                         streams.camera.left = streams.screen.width - streams.camera.width;
                     }
@@ -242,7 +258,6 @@
                     }
                     return streams;
                 } catch (e) {
-                    alert('Error capturing streams: ' + e.message);
                     console.error(e);
                 }
             }
@@ -252,7 +267,16 @@
                     alert('This browser does not supports WebRTC getUserMedia API.');
                     throw new Error('getUserMedia is not supported by this browser');
                 }
-                return await navigator.mediaDevices.getUserMedia(constraints);
+                try {
+                    return await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (e) {
+                    this._callback('captureerror', {
+                        error: e,
+                        camera: constraints.video,
+                        microphone: constraints.audio,
+                    });
+                    throw e;
+                }
             }
 
             async _getDisplayMedia(constraints) {
@@ -260,7 +284,16 @@
                     alert('This browser does not supports WebRTC getDisplayMedia API.');
                     throw new Error('getDisplayMedia is not supported by this browser');
                 }
-                return await navigator.mediaDevices.getDisplayMedia(constraints);
+                try {
+                    return await navigator.mediaDevices.getDisplayMedia(constraints);
+                } catch (e) {
+                    this._callback('captureerror', {
+                        error: e,
+                        screen: constraints.video,
+                        systemAudio: constraints.audio,
+                    });
+                    throw e;
+                }
             }
 
             _addStreamStopListener(stream, callback) {
@@ -426,7 +459,9 @@
             eles.forEach(ele => ele.disabled = true);
         }
 
-        function createApp(listenSpeak) {
+        let globalSpeakLister;
+        let globalApp;
+        function initApp(listenSpeak) {
             let isVideoPlaying = false;
             videoPreview.onplaying = function () {
                 isVideoPlaying = true;
@@ -448,18 +483,27 @@
                 isAudioPlaying = false;
             };
 
-            let app;
-            let speakingListen = new SpeakingListener()
-            app = new MediaRecorderApp();
-            app.onPreStart(() => {
+            if (globalSpeakLister) {
+                globalSpeakLister.stop();
+            }
+            globalSpeakLister = new SpeakingListener()
+            if (globalApp) {
+                globalApp.clean();
+            }
+            globalApp = new MediaRecorderApp();
+
+            globalApp.onCaptureBefore(() => {
                 tip.innerHTML = 'Preparing...';
             })
-            app.onStart((recordStreams, preview) => {
+            globalApp.onCaptureAfter((recordStreams) => {
+                tip.innerHTML = '';
+            })
+            globalApp.onStart((recordStreams, preview) => {
                 disableEle(startBtn, downloadBtn, resumeBtn);
                 enableEle(stopBtn, pauseBtn, discardBtn);
 
                 if (listenSpeak && recordStreams.microphone) {
-                    speakingListen.listen({
+                    globalSpeakLister.listen({
                         stream: preview,
                         timeoutSeconds: 3,
                     })
@@ -472,8 +516,8 @@
                     videoPreview.muted = true;
                 }
             })
-            app.onStop((isVideo, blobURL) => {
-                speakingListen.stop()
+            globalApp.onStop((isVideo, blobURL) => {
+                globalSpeakLister.stop()
 
                 disableEle(startBtn, stopBtn, pauseBtn, resumeBtn);
                 enableEle(discardBtn, downloadBtn);
@@ -489,23 +533,23 @@
                     audioPreview.load();
                 }
             })
-            app.onPause(() => {
+            globalApp.onPause(() => {
                 disableEle(startBtn, pauseBtn, downloadBtn);
                 enableEle(stopBtn, resumeBtn, discardBtn);
                 if (videoPreview.played && isVideoPlaying) {
                     videoPreview.pause();
                 }
             })
-            app.onResume(() => {
+            globalApp.onResume(() => {
                 disableEle(startBtn, resumeBtn, downloadBtn);
                 enableEle(stopBtn, pauseBtn, discardBtn);
                 if (videoPreview.paused && !isVideoPlaying) {
                     videoPreview.play();
                 }
             })
-            app.onDownload(() => { })
-            app.onDiscard(() => {
-                speakingListen.stop();
+            globalApp.onDownload(() => { })
+            globalApp.onDiscard(() => {
+                globalSpeakLister.stop();
 
                 enableEle(startBtn);
                 disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, discardBtn);
@@ -514,30 +558,45 @@
                 videoPreview.load();
                 audioPreview.load();
             })
+            globalApp.onCaptureError((errorObj) => {
+                let errorDevices = [];
+                if (errorObj.camera) {
+                    errorDevices.push('Camera');
+                }
+                if (errorObj.microphone) {
+                    errorDevices.push('Microphone');
+                }
+                if (errorObj.screen) {
+                    errorDevices.push('Screen');
+                }
+                if (errorObj.systemAudio) {
+                    errorDevices.push('System Audio');
+                }
+                const errorMsg = "Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message;
+                alert(errorMsg);
+            })
 
 
-            speakingListen.onSpeaking(() => {
+            globalSpeakLister.onSpeaking(() => {
                 console.log('speaking');
                 if (!resumeBtn.disabled) {
                     resumeBtn.click();
                 }
             })
-            speakingListen.onStopSpeaking(() => {
+            globalSpeakLister.onStopSpeaking(() => {
                 console.log('stop speaking');
                 if (!pauseBtn.disabled) {
                     pauseBtn.click();
                 }
             })
-
-            return app;
+            return globalApp;
         }
 
         enableEle(startBtn);
         disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, discardBtn);
 
-        let globalApp;
         startBtn.addEventListener('click', async () => {
-            globalApp = createApp(speakingCheckBok.checked);
+            initApp(speakingCheckBok.checked);
             await globalApp.start({
                 captures: {
                     camera: cameraCheckbox.checked,
