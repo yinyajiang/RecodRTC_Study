@@ -456,8 +456,9 @@
             eles.forEach(ele => ele.disabled = true);
         }
 
-        let globalSpeakLister;
-        let globalApp;
+
+        let globalSpeakLister = new SpeakingListener();
+        let globalApp = new MediaRecorderApp();
         function initApp(listenSpeak) {
             let isVideoPlaying = false;
             videoPreview.onplaying = function () {
@@ -483,7 +484,7 @@
             if (globalSpeakLister) {
                 globalSpeakLister.stop();
             }
-            globalSpeakLister = new SpeakingListener()
+            globalSpeakLister = new SpeakingListener();
             if (globalApp) {
                 globalApp.clean();
             }
