@@ -15,7 +15,7 @@
     <button id="btn-pause-recording" disabled>Pause Recording</button>
     <button id="btn-resume-recording" disabled>Resume Recording</button>
     <button id="btn-download-recording" disabled>Download</button>
-    <button id="btn-reset">Reset</button>
+    <button id="btn-discard">Discard</button>
 
     <br /><br />
 
@@ -67,21 +67,26 @@
             onResume(callback) {
                 this._addHook('resume', callback);
             }
-            onReset(callback) {
-                this._addHook('reset', callback);
+            onDiscard(callback) {
+                this._addHook('discard', callback);
             }
             onPreStart(callback) {
                 this._addHook('prestart', callback);
             }
 
-            reset() {
-                this._callback('reset');
+            discard() {
                 this._stop = false;
                 this._blobURL = null;
                 this._close(true);
+                this._callback('discard');
             }
 
             async start({ captures }) {
+                if (!captures.camera && !captures.microphone && !captures.screen && !captures.systemAudio) {
+                    console.log('Please select at least one media source to record.');
+                    return;
+                }
+
                 this._stop = false;
                 this._blobURL = null;
                 this._close();
@@ -404,7 +409,7 @@
         const pauseBtn = document.querySelector('#btn-pause-recording');
         const resumeBtn = document.querySelector('#btn-resume-recording');
         const downloadBtn = document.querySelector('#btn-download-recording');
-        const resetBtn = document.querySelector('#btn-reset');
+        const discardBtn = document.querySelector('#btn-discard');
         const cameraCheckbox = document.querySelector('#checkbox-camera');
         const microphoneCheckbox = document.querySelector('#checkbox-microphone');
         const screenCheckbox = document.querySelector('#checkbox-screen');
@@ -421,7 +426,7 @@
             eles.forEach(ele => ele.disabled = true);
         }
 
-        function createApp() {
+        function createApp(listenSpeak) {
             let isVideoPlaying = false;
             videoPreview.onplaying = function () {
                 isVideoPlaying = true;
@@ -451,9 +456,9 @@
             })
             app.onStart((recordStreams, preview) => {
                 disableEle(startBtn, downloadBtn, resumeBtn);
-                enableEle(stopBtn, pauseBtn, resetBtn);
+                enableEle(stopBtn, pauseBtn, discardBtn);
 
-                if (speakingCheckBok.checked && recordStreams.microphone) {
+                if (listenSpeak && recordStreams.microphone) {
                     speakingListen.listen({
                         stream: preview,
                         timeoutSeconds: 3,
@@ -471,7 +476,7 @@
                 speakingListen.stop()
 
                 disableEle(startBtn, stopBtn, pauseBtn, resumeBtn);
-                enableEle(resetBtn, downloadBtn);
+                enableEle(discardBtn, downloadBtn);
                 if (isVideo) {
                     videoPreview.src = videoPreview.srcObject = null;
                     videoPreview.src = blobURL;
@@ -485,24 +490,24 @@
             })
             app.onPause(() => {
                 disableEle(startBtn, pauseBtn, downloadBtn);
-                enableEle(stopBtn, resumeBtn, resetBtn);
+                enableEle(stopBtn, resumeBtn, discardBtn);
                 if (videoPreview.played && isVideoPlaying) {
                     videoPreview.pause();
                 }
             })
             app.onResume(() => {
                 disableEle(startBtn, resumeBtn, downloadBtn);
-                enableEle(stopBtn, pauseBtn, resetBtn);
+                enableEle(stopBtn, pauseBtn, discardBtn);
                 if (videoPreview.paused && !isVideoPlaying) {
                     videoPreview.play();
                 }
             })
             app.onDownload(() => { })
-            app.onReset(() => {
+            app.onDiscard(() => {
                 speakingListen.stop();
 
                 enableEle(startBtn);
-                disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, resetBtn);
+                disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, discardBtn);
                 videoPreview.src = videoPreview.srcObject = null;
                 audioPreview.src = audioPreview.srcObject = null;
                 videoPreview.load();
@@ -511,13 +516,13 @@
 
 
             speakingListen.onSpeaking(() => {
-                console.debug('speaking');
+                console.log('speaking');
                 if (!resumeBtn.disabled) {
                     resumeBtn.click();
                 }
             })
             speakingListen.onStopSpeaking(() => {
-                console.debug('stop speaking');
+                console.log('stop speaking');
                 if (!pauseBtn.disabled) {
                     pauseBtn.click();
                 }
@@ -527,11 +532,11 @@
         }
 
         enableEle(startBtn);
-        disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, resetBtn);
+        disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, discardBtn);
 
         let globalApp;
         startBtn.addEventListener('click', async () => {
-            globalApp = createApp();
+            globalApp = createApp(speakingCheckBok.checked);
             await globalApp.start({
                 captures: {
                     camera: cameraCheckbox.checked,
@@ -545,7 +550,12 @@
         pauseBtn.addEventListener('click', () => globalApp.pause());
         resumeBtn.addEventListener('click', () => globalApp.resume());
         downloadBtn.addEventListener('click', () => globalApp.download());
-        resetBtn.addEventListener('click', () => globalApp.reset());
+        discardBtn.addEventListener('click', () => globalApp.discard());
+        speakingCheckBok.addEventListener('change', () => {
+            if (speakingCheckBok.checked) {
+                microphoneCheckbox.checked = true;
+            }
+        })
     </script>
 </body>
 
