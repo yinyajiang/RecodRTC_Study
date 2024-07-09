@@ -28,7 +28,9 @@
     <hr>
     <div>
         <audio autoplay playsinline></audio>
-        <video autoplay playsinline style="width: 200px; height: 200px;"></video>
+        <video autoplay playsinline style="width: 200px; height: 200px;">
+        </video>
+        <canvas id="audio-draw-canvas" style="width: 200px; height: 200px; "></canvas>
     </div>
 
     <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
@@ -434,6 +436,72 @@
             }
         }
 
+        class CanvasDrawAudio {
+            start({ stream, canvas, barOptions }) {
+                this._canvas = canvas;
+                this._barOptions = Object.assign({
+                    barWidth: 15,
+                    barSpacing: 5,
+                    barCount: 10,
+                    barColor: '#712cde',
+                    barMinHeight: 8,
+                }, barOptions);
+
+                this._ctx2d = this._canvas.getContext('2d');
+                this._ctx2d.fillStyle = this._barOptions.barColor;
+
+                // 创建音频上下文和分析器
+                this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this._analyser = this._audioContext.createAnalyser();
+                this._analyser.fftSize = 32;
+
+                const source = this._audioContext.createMediaStreamSource(stream);
+                source.connect(this._analyser);
+
+                const bufferLength = this._analyser.frequencyBinCount;
+                this._dataArray = new Uint8Array(bufferLength);
+                this._draw();
+            }
+
+            async stop() {
+                if (this._animationId) {
+                    cancelAnimationFrame(this._animationId);
+                    this._animationId = null;
+                }
+                if (this._ctx2d) {
+                    this._ctx2d.clearRect(0, 0, this._canvas.width, this._canvas.height);
+                    this._ctx2d = null;
+                }
+                if (this._audioContext) {
+                    await this._audioContext.close();
+                    this._audioContext = null;
+                }
+                this._analyser = null;
+                this._canvas = null;
+            }
+
+            // 绘制函数
+            _draw() {
+                this._analyser.getByteFrequencyData(this._dataArray);
+                this._ctx2d.clearRect(0, 0, this._canvas.width, this._canvas.height);
+
+
+                const centerY = this._canvas.height / 2;
+                const startX = (this._canvas.width - (this._barOptions.barWidth + this._barOptions.barSpacing) * this._barOptions.barCount + this._barOptions.barSpacing) / 2;
+
+                for (let i = 0; i < this._barOptions.barCount; i++) {
+
+                    let barHeight = (this._dataArray[i * 2] / 255) * this._canvas.height;
+                    barHeight = Math.max(barHeight, this._barOptions.barMinHeight);
+
+                    const x = startX + (this._barOptions.barWidth + this._barOptions.barSpacing) * i;
+                    this._ctx2d.fillRect(x, centerY - barHeight / 2, this._barOptions.barWidth, barHeight);
+                }
+                this._animationId = requestAnimationFrame(() => this._draw());
+            }
+        }
+
+
         const startBtn = document.querySelector('#btn-start-recording');
         const stopBtn = document.querySelector('#btn-stop-recording');
         const pauseBtn = document.querySelector('#btn-pause-recording');
@@ -448,6 +516,7 @@
         const audioPreview = document.querySelector('audio');
         const speakingCheckBok = document.querySelector('#checkbox-speaking');
         const tip = document.querySelector('#tip');
+        const audioCanvas = document.querySelector('#audio-draw-canvas');
 
         function enableEle(...eles) {
             eles.forEach(ele => ele.disabled = false);
@@ -459,6 +528,7 @@
 
         let globalSpeakLister = new SpeakingListener();
         let globalApp = new MediaRecorderApp();
+        let globalDrawAudio = new CanvasDrawAudio();
         function initApp(listenSpeak) {
             let isVideoPlaying = false;
             videoPreview.onplaying = function () {
@@ -481,14 +551,21 @@
                 isAudioPlaying = false;
             };
 
+            if (globalDrawAudio) {
+                globalDrawAudio.stop();
+            }
+            globalDrawAudio = new CanvasDrawAudio();
+
             if (globalSpeakLister) {
                 globalSpeakLister.stop();
             }
+
             globalSpeakLister = new SpeakingListener();
             if (globalApp) {
                 globalApp.clean();
             }
             globalApp = new MediaRecorderApp();
+
 
             globalApp.onCaptureBefore(() => {
                 tip.innerHTML = 'Preparing...';
@@ -513,9 +590,18 @@
                     videoPreview.srcObject = preview;
                     videoPreview.muted = true;
                 }
+
+                if (!recordStreams.isVideo) {
+
+                    globalDrawAudio.start({
+                        stream: preview,
+                        canvas: audioCanvas,
+                    });
+                }
             })
             globalApp.onStop((isVideo, blobURL) => {
                 globalSpeakLister.stop()
+                globalDrawAudio.stop();
 
                 disableEle(startBtn, stopBtn, pauseBtn, resumeBtn);
                 enableEle(discardBtn, downloadBtn);
