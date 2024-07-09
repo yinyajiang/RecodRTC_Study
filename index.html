@@ -24,11 +24,13 @@
     <input type="checkbox" id="checkbox-screen">Screen</input>
     <input type="checkbox" id="checkbox-system-audio"> System Audio</input>
     <input type="checkbox" id="checkbox-speaking"> 监听声音</input>
+    <br /><br />
+    <div id="record-timer"></div>
 
     <hr>
     <div>
         <audio autoplay playsinline></audio>
-        <video autoplay playsinline style="width: 200px; height: 200px;">
+        <video autoplay playsinline id="video-preview" style="width: 200px; height: 200px;">
         </video>
         <canvas id="audio-draw-canvas" style="width: 200px; height: 200px; "></canvas>
     </div>
@@ -82,6 +84,10 @@
                 this._addHook('captureerror', callback);
             }
 
+            onUpdateRecordTime(callback) {
+                this._addHook('updateRecordTime', callback);
+            }
+
             discard() {
                 this.clean(true);
                 this._callback('discard');
@@ -129,8 +135,34 @@
                 };
                 this._recorder = RecordRTC(this._recordStreams, recordOptions);
 
-
                 this._recorder.startRecording();
+
+                this._loopCalculateRecordTime(true);
+            }
+
+            _loopCalculateRecordTime(first) {
+                if (!this._recorder || !this._recordStreams) {
+                    return;
+                }
+                if (first) {
+                    this._dateStarted = new Date().getTime();
+                }
+                const secs = (new Date().getTime() - this._dateStarted) / 1000
+                let hr = Math.floor(secs / 3600);
+                let min = Math.floor((secs - (hr * 3600)) / 60);
+                let sec = Math.floor(secs - (hr * 3600) - (min * 60));
+                if (min < 10) {
+                    min = "0" + min;
+                }
+                if (sec < 10) {
+                    sec = "0" + sec;
+                }
+                if (hr <= 0) {
+                    this._callback('updateRecordTime', `${min}:${sec}`);
+                } else {
+                    this._callback('updateRecordTime', `${hr}:${min}:${sec}`);
+                }
+                setTimeout(() => this._loopCalculateRecordTime(), 1000);
             }
 
             stop() {
@@ -517,6 +549,7 @@
         const speakingCheckBok = document.querySelector('#checkbox-speaking');
         const tip = document.querySelector('#tip');
         const audioCanvas = document.querySelector('#audio-draw-canvas');
+        const recordTime = document.querySelector('#record-timer');
 
         function enableEle(...eles) {
             eles.forEach(ele => ele.disabled = false);
@@ -569,10 +602,10 @@
 
             globalApp.onCaptureBefore(() => {
                 tip.innerHTML = 'Preparing...';
-            })
+            });
             globalApp.onCaptureAfter((recordStreams) => {
                 tip.innerHTML = '';
-            })
+            });
             globalApp.onStart((recordStreams, preview) => {
                 disableEle(startBtn, downloadBtn, resumeBtn);
                 enableEle(stopBtn, pauseBtn, discardBtn);
@@ -598,7 +631,7 @@
                         canvas: audioCanvas,
                     });
                 }
-            })
+            });
             globalApp.onStop((isVideo, blobURL) => {
                 globalSpeakLister.stop()
                 globalDrawAudio.stop();
@@ -616,22 +649,22 @@
                     audioPreview.muted = false;
                     audioPreview.load();
                 }
-            })
+            });
             globalApp.onPause(() => {
                 disableEle(startBtn, pauseBtn, downloadBtn);
                 enableEle(stopBtn, resumeBtn, discardBtn);
                 if (videoPreview.played && isVideoPlaying) {
                     videoPreview.pause();
                 }
-            })
+            });
             globalApp.onResume(() => {
                 disableEle(startBtn, resumeBtn, downloadBtn);
                 enableEle(stopBtn, pauseBtn, discardBtn);
                 if (videoPreview.paused && !isVideoPlaying) {
                     videoPreview.play();
                 }
-            })
-            globalApp.onDownload(() => { })
+            });
+            globalApp.onDownload(() => { });
             globalApp.onDiscard(() => {
                 globalSpeakLister.stop();
 
@@ -641,7 +674,7 @@
                 audioPreview.src = audioPreview.srcObject = null;
                 videoPreview.load();
                 audioPreview.load();
-            })
+            });
             globalApp.onCaptureError((errorObj) => {
                 let errorDevices = [];
                 if (errorObj.camera) {
@@ -658,7 +691,10 @@
                 }
                 const errorMsg = "Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message;
                 alert(errorMsg);
-            })
+            });
+            globalApp.onUpdateRecordTime((time) => {
+                recordTime.innerHTML = time;
+            });
 
 
             globalSpeakLister.onSpeaking(() => {
@@ -672,7 +708,7 @@
                 if (!pauseBtn.disabled) {
                     pauseBtn.click();
                 }
-            })
+            });
             return globalApp;
         }
 
