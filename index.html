@@ -5,39 +5,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
+    <style>
+        .quick-active {
+            border: 1px solid #4CAF50;
+        }
+    </style>
 </head>
 
 <body>
-    <div id="tip"></div>
-
-    <button id="btn-start-recording">Start Recording</button>
-    <button id="btn-stop-recording" disabled>Stop Recording</button>
-    <button id="btn-pause-recording" disabled>Pause Recording</button>
-    <button id="btn-resume-recording" disabled>Resume Recording</button>
-    <button id="btn-download-recording" disabled>Download</button>
-    <button id="btn-discard">Discard</button>
-
-    <br /><br />
-
-    <input type="checkbox" id="checkbox-camera" checked> Camera</checkbox>
-    <input type="checkbox" id="checkbox-microphone"> Microphone</input>
-    <input type="checkbox" id="checkbox-screen">Screen</input>
-    <input type="checkbox" id="checkbox-system-audio"> System Audio</input>
-    <input type="checkbox" id="checkbox-speaking"> 监听声音</input>
-    <br /><br />
-    <div id="record-timer"></div>
-
-    <hr>
-    <div>
-        <audio autoplay playsinline></audio>
-        <video autoplay playsinline id="video-preview" style="width: 200px; height: 200px;">
-        </video>
-        <canvas id="audio-draw-canvas" style="width: 200px; height: 200px; "></canvas>
+    <div id="block-head"> Head <br><br><br></div>
+    <div id="block-setting">
+        <div>quick start</div>
+        <button id="btn-quick-screen">Screen</button>
+        <button id="btn-quick-camera">Camera</button>
+        <button id="btn-quick-screen-camera">Screen + Camera</button>
+        <button id="btn-start">Start Recording</button>
+        <div>custom devices</div>
+        <input type="checkbox" id="checkbox-camera" checked> Camera</checkbox>
+        <input type="checkbox" id="checkbox-microphone"> Microphone</input>
+        <input type="checkbox" id="checkbox-screen">Screen</input>
+        <input type="checkbox" id="checkbox-system-audio"> System Audio</input>
+        <div>advance setting</div>
+        <input type="range" id="input-speak-time-out" min="0" max="30" step="1" value="0">监听声音</input> <span
+            id="display-speak-timeout-value"></span>
+        <br><br><br>
     </div>
-
+    <div id="block-app">
+        <button id="btn-back">back</button>
+        <br><br><br>
+        <div id="app-page-prepare">Prepare</div>
+        <br><br><br>
+        <div id="app-page-record">
+            <div id="record-timer">00:00</div>
+            <button id="btn-stop" disabled>Stop Recording</button>
+            <button id="btn-pause" disabled>Pause Recording</button>
+            <button id="btn-resume" disabled>Resume Recording</button>
+            <button id="btn-download" disabled>Download</button>
+            <button id="btn-discard">Discard</button>
+            <br>
+            <hr>
+            <div>
+                <audio autoplay playsinline></audio>
+                <video autoplay playsinline id="video-preview" style="width: 200px; height: 200px;">
+                </video>
+                <canvas id="audio-draw-canvas" style="width: 200px; height: 200px; "></canvas>
+            </div>
+        </div>
+        <br><br><br>
+    </div>
+    <div id="block-description">
+        description
+    </div>
     <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
     <script src="https://www.webrtc-experiment.com/hark.js"></script>
-
     <script>
         function IsEdge() {
             if (typeof window.__isEdge !== 'undefined') {
@@ -53,6 +73,12 @@
             }
             window.__isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
             return window.__isSafari;
+        }
+
+        function DispatchClick(element) {
+            let event = document.createEvent('Event');
+            event.initEvent('click', true, true);
+            element.dispatchEvent(event);
         }
 
         class MediaRecorderApp {
@@ -137,32 +163,7 @@
 
                 this._recorder.startRecording();
 
-                this._loopCalculateRecordTime(true);
-            }
-
-            _loopCalculateRecordTime(first) {
-                if (!this._recorder || !this._recordStreams) {
-                    return;
-                }
-                if (first) {
-                    this._dateStarted = new Date().getTime();
-                }
-                const secs = (new Date().getTime() - this._dateStarted) / 1000
-                let hr = Math.floor(secs / 3600);
-                let min = Math.floor((secs - (hr * 3600)) / 60);
-                let sec = Math.floor(secs - (hr * 3600) - (min * 60));
-                if (min < 10) {
-                    min = "0" + min;
-                }
-                if (sec < 10) {
-                    sec = "0" + sec;
-                }
-                if (hr <= 0) {
-                    this._callback('updateRecordTime', `${min}:${sec}`);
-                } else {
-                    this._callback('updateRecordTime', `${hr}:${min}:${sec}`);
-                }
-                setTimeout(() => this._loopCalculateRecordTime(), 1000);
+                this._startCalculateTime();
             }
 
             stop() {
@@ -187,6 +188,7 @@
             pause() {
                 if (this._recorder) {
                     this._recorder.pauseRecording();
+                    this._pauseCalculateTime();
                     this._callback('pause');
                 }
             }
@@ -202,6 +204,7 @@
             resume() {
                 if (this._recorder) {
                     this._recorder.resumeRecording();
+                    this._startCalculateTime()
                     this._callback('resume');
                 }
             }
@@ -376,9 +379,7 @@
                         save.click();
                     } else {
                         save.target = '_blank';
-                        let event = document.createEvent('Event');
-                        event.initEvent('click', true, true);
-                        save.dispatchEvent(event);
+                        DispatchClick(save);
                     }
                     (window.URL || window.webkitURL).revokeObjectURL(save.href);
                 }
@@ -392,6 +393,8 @@
             }
 
             _close(reset) {
+                this._stopCalculateTime();
+
                 if (!this._recordStreams) return;
                 const callStop = (obj) => {
                     if (obj && typeof obj.stop === 'function') {
@@ -417,6 +420,51 @@
                 this._recordStreams = null;
                 this._recorder = null;
             };
+
+
+            _stopCalculateTime() {
+                this._pauseCalculateTime();
+                this._lastSecs = 0;
+            }
+            _pauseCalculateTime() {
+                if (this._calculateTimer) {
+                    clearTimeout(this._calculateTimer);
+                    this._calculateTimer = null;
+                }
+            }
+            _startCalculateTime() {
+                if (!this._recorder || !this._recordStreams) {
+                    return;
+                }
+                this._startTime = new Date().getTime();
+                if (this._lastSecs) {
+                    this._startTime -= this._lastSecs * 1000;
+                    this._lastSecs = 0;
+                }
+                this._calculateTimer = setInterval(() => this._calculateTime(), 1000);
+            }
+            _calculateTime() {
+                if (!this._recorder || !this._recordStreams || !this._startTime) {
+                    return;
+                }
+                const secs = (new Date().getTime() - this._startTime) / 1000
+                this._lastSecs = secs;
+
+                let hr = Math.floor(secs / 3600);
+                let min = Math.floor((secs - (hr * 3600)) / 60);
+                let sec = Math.floor(secs - (hr * 3600) - (min * 60));
+                if (min < 10) {
+                    min = "0" + min;
+                }
+                if (sec < 10) {
+                    sec = "0" + sec;
+                }
+                if (hr <= 0) {
+                    this._callback('updateRecordTime', `${min}:${sec}`);
+                } else {
+                    this._callback('updateRecordTime', `${hr}:${min}:${sec}`);
+                }
+            }
         }
 
 
@@ -532,210 +580,289 @@
                 this._animationId = requestAnimationFrame(() => this._draw());
             }
         }
-
-
-        const startBtn = document.querySelector('#btn-start-recording');
-        const stopBtn = document.querySelector('#btn-stop-recording');
-        const pauseBtn = document.querySelector('#btn-pause-recording');
-        const resumeBtn = document.querySelector('#btn-resume-recording');
-        const downloadBtn = document.querySelector('#btn-download-recording');
-        const discardBtn = document.querySelector('#btn-discard');
-        const cameraCheckbox = document.querySelector('#checkbox-camera');
-        const microphoneCheckbox = document.querySelector('#checkbox-microphone');
-        const screenCheckbox = document.querySelector('#checkbox-screen');
-        const systemAudioCheckbox = document.querySelector('#checkbox-system-audio');
-        const videoPreview = document.querySelector('video');
-        const audioPreview = document.querySelector('audio');
-        const speakingCheckBok = document.querySelector('#checkbox-speaking');
-        const tip = document.querySelector('#tip');
-        const audioCanvas = document.querySelector('#audio-draw-canvas');
-        const recordTime = document.querySelector('#record-timer');
-
-        function enableEle(...eles) {
-            eles.forEach(ele => ele.disabled = false);
-        }
-        function disableEle(...eles) {
-            eles.forEach(ele => ele.disabled = true);
+    </script>
+    <script>
+        function clickElement(element) {
+            let event = document.createEvent('Event');
+            event.initEvent('click', true, true);
+            element.dispatchEvent(event);
         }
 
+        function settingInit() {
+            const cameraCheckbox = document.querySelector('#checkbox-camera');
+            const microphoneCheckbox = document.querySelector('#checkbox-microphone');
+            const screenCheckbox = document.querySelector('#checkbox-screen');
+            const systemAudioCheckbox = document.querySelector('#checkbox-system-audio');
 
-        let globalSpeakLister = new SpeakingListener();
-        let globalApp = new MediaRecorderApp();
-        let globalDrawAudio = new CanvasDrawAudio();
-        function initApp(listenSpeak) {
-            let isVideoPlaying = false;
-            videoPreview.onplaying = function () {
-                isVideoPlaying = true;
-            };
-            videoPreview.onpause = function () {
-                isVideoPlaying = false;
-            };
-            videoPreview.onended = function () {
-                isVideoPlaying = false;
-            };
-            let isAudioPlaying = false;
-            audioPreview.onplaying = function () {
-                isAudioPlaying = true;
-            };
-            audioPreview.onpause = function () {
-                isAudioPlaying = false;
-            };
-            audioPreview.onended = function () {
-                isAudioPlaying = false;
-            };
+            const quickScreenBtn = document.querySelector('#btn-quick-screen');
+            const quickCameraBtn = document.querySelector('#btn-quick-camera');
+            const quickScreenCameraBtn = document.querySelector('#btn-quick-screen-camera');
 
-            if (globalDrawAudio) {
-                globalDrawAudio.stop();
+            const inputSpeakTimeout = document.querySelector('#input-speak-time-out');
+            const displayTimeoutValue = document.querySelector("#display-speak-timeout-value");
+
+
+            /* 快速配置 */
+            quickScreenBtn.addEventListener('click', () => {
+                quickScreenBtn.classList.add('quick-active');
+                quickCameraBtn.classList.remove('quick-active');
+                quickScreenCameraBtn.classList.remove('quick-active');
+
+                screenCheckbox.checked = true;
+                cameraCheckbox.checked = false;
+                microphoneCheckbox.checked = false;
+                systemAudioCheckbox.checked = false;
+
+                resetAdvancedSetting();
+            })
+            quickCameraBtn.addEventListener('click', () => {
+                quickCameraBtn.classList.add('quick-active');
+                quickScreenBtn.classList.remove('quick-active');
+                quickScreenCameraBtn.classList.remove('quick-active');
+
+                cameraCheckbox.checked = true;
+                microphoneCheckbox.checked = true;
+                screenCheckbox.checked = false;
+                systemAudioCheckbox.checked = false;
+
+                resetAdvancedSetting();
+            })
+            quickScreenCameraBtn.addEventListener('click', () => {
+                quickScreenCameraBtn.classList.add('quick-active');
+                quickScreenBtn.classList.remove('quick-active');
+                quickCameraBtn.classList.remove('quick-active');
+
+                screenCheckbox.checked = true;
+                cameraCheckbox.checked = true;
+                microphoneCheckbox.checked = true;
+                systemAudioCheckbox.checked = false;
+
+                resetAdvancedSetting();
+            })
+
+
+            /* 高级设置 */
+            function resetAdvancedSetting() {
+                displayTimeoutValue.innerHTML = 0;
+                inputSpeakTimeout.value = 0;
             }
-            globalDrawAudio = new CanvasDrawAudio();
 
-            if (globalSpeakLister) {
-                globalSpeakLister.stop();
-            }
-
-            globalSpeakLister = new SpeakingListener();
-            if (globalApp) {
-                globalApp.clean();
-            }
-            globalApp = new MediaRecorderApp();
-
-
-            globalApp.onCaptureBefore(() => {
-                tip.innerHTML = 'Preparing...';
-            });
-            globalApp.onCaptureAfter((recordStreams) => {
-                tip.innerHTML = '';
-            });
-            globalApp.onStart((recordStreams, preview) => {
-                disableEle(startBtn, downloadBtn, resumeBtn);
-                enableEle(stopBtn, pauseBtn, discardBtn);
-
-                if (listenSpeak && recordStreams.microphone) {
-                    globalSpeakLister.listen({
-                        stream: preview,
-                        timeoutSeconds: 3,
-                    })
-                }
-
-                if (recordStreams.isVideo && preview) {
-                    videoPreview.style.display = 'block';
-                    videoPreview.src = null;
-                    videoPreview.srcObject = preview;
-                    videoPreview.muted = true;
-                }
-
-                if (!recordStreams.isVideo) {
-
-                    globalDrawAudio.start({
-                        stream: preview,
-                        canvas: audioCanvas,
-                    });
-                }
-            });
-            globalApp.onStop((isVideo, blobURL) => {
-                globalSpeakLister.stop()
-                globalDrawAudio.stop();
-
-                disableEle(startBtn, stopBtn, pauseBtn, resumeBtn);
-                enableEle(discardBtn, downloadBtn);
-                if (isVideo) {
-                    videoPreview.src = videoPreview.srcObject = null;
-                    videoPreview.src = blobURL;
-                    videoPreview.muted = false;
-                    videoPreview.load();
-                } else {
-                    audioPreview.src = audioPreview.srcObject = null;
-                    audioPreview.src = blobURL;
-                    audioPreview.muted = false;
-                    audioPreview.load();
-                }
-            });
-            globalApp.onPause(() => {
-                disableEle(startBtn, pauseBtn, downloadBtn);
-                enableEle(stopBtn, resumeBtn, discardBtn);
-                if (videoPreview.played && isVideoPlaying) {
-                    videoPreview.pause();
-                }
-            });
-            globalApp.onResume(() => {
-                disableEle(startBtn, resumeBtn, downloadBtn);
-                enableEle(stopBtn, pauseBtn, discardBtn);
-                if (videoPreview.paused && !isVideoPlaying) {
-                    videoPreview.play();
-                }
-            });
-            globalApp.onDownload(() => { });
-            globalApp.onDiscard(() => {
-                globalSpeakLister.stop();
-
-                enableEle(startBtn);
-                disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, discardBtn);
-                videoPreview.src = videoPreview.srcObject = null;
-                audioPreview.src = audioPreview.srcObject = null;
-                videoPreview.load();
-                audioPreview.load();
-            });
-            globalApp.onCaptureError((errorObj) => {
-                let errorDevices = [];
-                if (errorObj.camera) {
-                    errorDevices.push('Camera');
-                }
-                if (errorObj.microphone) {
-                    errorDevices.push('Microphone');
-                }
-                if (errorObj.screen) {
-                    errorDevices.push('Screen');
-                }
-                if (errorObj.systemAudio) {
-                    errorDevices.push('System Audio');
-                }
-                const errorMsg = "Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message;
-                alert(errorMsg);
-            });
-            globalApp.onUpdateRecordTime((time) => {
-                recordTime.innerHTML = time;
-            });
-
-
-            globalSpeakLister.onSpeaking(() => {
-                console.log('speaking');
-                if (!resumeBtn.disabled) {
-                    resumeBtn.click();
+            microphoneCheckbox.addEventListener('change', () => {
+                if (!microphoneCheckbox.checked) {
+                    displayTimeoutValue.innerHTML = 0;
+                    inputSpeakTimeout.value = 0;
                 }
             })
-            globalSpeakLister.onStopSpeaking(() => {
-                console.log('stop speaking');
-                if (!pauseBtn.disabled) {
-                    pauseBtn.click();
+            inputSpeakTimeout.addEventListener('input', () => {
+                if (inputSpeakTimeout.value > 0) {
+                    microphoneCheckbox.checked = true;
+                } else {
+                    microphoneCheckbox.checked = false;
                 }
-            });
-            return globalApp;
+                displayTimeoutValue.innerHTML = inputSpeakTimeout.value;
+            })
+
+            // 选中默认配置
+            setTimeout(() => clickElement(quickScreenBtn), 500);
         }
 
-        enableEle(startBtn);
-        disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, discardBtn);
+        window.addEventListener('DOMContentLoaded', () => {
+            settingInit();
 
-        startBtn.addEventListener('click', async () => {
-            initApp(speakingCheckBok.checked);
-            await globalApp.start({
-                captures: {
-                    camera: cameraCheckbox.checked,
-                    microphone: microphoneCheckbox.checked,
-                    screen: screenCheckbox.checked,
-                    systemAudio: systemAudioCheckbox.checked,
-                },
-            });
-        });
-        stopBtn.addEventListener('click', () => globalApp.stop());
-        pauseBtn.addEventListener('click', () => globalApp.pause());
-        resumeBtn.addEventListener('click', () => globalApp.resume());
-        downloadBtn.addEventListener('click', () => globalApp.download());
-        discardBtn.addEventListener('click', () => globalApp.discard());
-        speakingCheckBok.addEventListener('change', () => {
-            if (speakingCheckBok.checked) {
-                microphoneCheckbox.checked = true;
+            const startBtn = document.querySelector('#btn-start');
+            const stopBtn = document.querySelector('#btn-stop');
+            const pauseBtn = document.querySelector('#btn-pause');
+            const resumeBtn = document.querySelector('#btn-resume');
+            const downloadBtn = document.querySelector('#btn-download');
+            const discardBtn = document.querySelector('#btn-discard');
+
+            const videoPreview = document.querySelector('video');
+            const audioPreview = document.querySelector('audio');
+            const audioCanvas = document.querySelector('#audio-draw-canvas');
+            const recordTime = document.querySelector('#record-timer');
+
+            function enableEle(...eles) {
+                eles.forEach(ele => ele.disabled = false);
             }
-        })
+            function disableEle(...eles) {
+                eles.forEach(ele => ele.disabled = true);
+            }
+
+
+            let globalSpeakLister = new SpeakingListener();
+            let globalApp = new MediaRecorderApp();
+            let globalDrawAudio = new CanvasDrawAudio();
+            function initApp(listenSpeakTimeout) {
+                let isVideoPlaying = false;
+                videoPreview.onplaying = function () {
+                    isVideoPlaying = true;
+                };
+                videoPreview.onpause = function () {
+                    isVideoPlaying = false;
+                };
+                videoPreview.onended = function () {
+                    isVideoPlaying = false;
+                };
+                let isAudioPlaying = false;
+                audioPreview.onplaying = function () {
+                    isAudioPlaying = true;
+                };
+                audioPreview.onpause = function () {
+                    isAudioPlaying = false;
+                };
+                audioPreview.onended = function () {
+                    isAudioPlaying = false;
+                };
+
+                if (globalDrawAudio) {
+                    globalDrawAudio.stop();
+                }
+                globalDrawAudio = new CanvasDrawAudio();
+
+                if (globalSpeakLister) {
+                    globalSpeakLister.stop();
+                }
+
+                globalSpeakLister = new SpeakingListener();
+                if (globalApp) {
+                    globalApp.clean();
+                }
+                globalApp = new MediaRecorderApp();
+
+                globalApp.onCaptureBefore(() => {
+
+                });
+                globalApp.onCaptureAfter((recordStreams) => {
+
+                });
+                globalApp.onStart((recordStreams, preview) => {
+                    disableEle(startBtn, downloadBtn, resumeBtn);
+                    enableEle(stopBtn, pauseBtn, discardBtn);
+
+                    if (listenSpeakTimeout && listenSpeakTimeout > 0 && recordStreams.microphone) {
+                        globalSpeakLister.listen({
+                            stream: preview,
+                            timeoutSeconds: listenSpeakTimeout,
+                        })
+                    }
+
+                    if (recordStreams.isVideo && preview) {
+                        videoPreview.style.display = 'block';
+                        videoPreview.src = null;
+                        videoPreview.srcObject = preview;
+                        videoPreview.muted = true;
+                    }
+
+                    if (!recordStreams.isVideo) {
+
+                        globalDrawAudio.start({
+                            stream: preview,
+                            canvas: audioCanvas,
+                        });
+                    }
+                });
+                globalApp.onStop((isVideo, blobURL) => {
+                    globalSpeakLister.stop()
+                    globalDrawAudio.stop();
+
+                    disableEle(startBtn, stopBtn, pauseBtn, resumeBtn);
+                    enableEle(discardBtn, downloadBtn);
+                    if (isVideo) {
+                        videoPreview.src = videoPreview.srcObject = null;
+                        videoPreview.src = blobURL;
+                        videoPreview.muted = false;
+                        videoPreview.load();
+                    } else {
+                        audioPreview.src = audioPreview.srcObject = null;
+                        audioPreview.src = blobURL;
+                        audioPreview.muted = false;
+                        audioPreview.load();
+                    }
+                });
+                globalApp.onPause(() => {
+                    disableEle(startBtn, pauseBtn, downloadBtn);
+                    enableEle(stopBtn, resumeBtn, discardBtn);
+                    if (videoPreview.played && isVideoPlaying) {
+                        videoPreview.pause();
+                    }
+                });
+                globalApp.onResume(() => {
+                    disableEle(startBtn, resumeBtn, downloadBtn);
+                    enableEle(stopBtn, pauseBtn, discardBtn);
+                    if (videoPreview.paused && !isVideoPlaying) {
+                        videoPreview.play();
+                    }
+                });
+                globalApp.onDownload(() => { });
+                globalApp.onDiscard(() => {
+                    globalSpeakLister.stop();
+
+                    enableEle(startBtn);
+                    disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, discardBtn);
+                    videoPreview.src = videoPreview.srcObject = null;
+                    audioPreview.src = audioPreview.srcObject = null;
+                    videoPreview.load();
+                    audioPreview.load();
+                });
+                globalApp.onCaptureError((errorObj) => {
+                    let errorDevices = [];
+                    if (errorObj.camera) {
+                        errorDevices.push('Camera');
+                    }
+                    if (errorObj.microphone) {
+                        errorDevices.push('Microphone');
+                    }
+                    if (errorObj.screen) {
+                        errorDevices.push('Screen');
+                    }
+                    if (errorObj.systemAudio) {
+                        errorDevices.push('System Audio');
+                    }
+                    const errorMsg = "Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message;
+                    alert(errorMsg);
+                });
+                globalApp.onUpdateRecordTime((time) => {
+                    recordTime.innerHTML = time;
+                });
+
+
+                globalSpeakLister.onSpeaking(() => {
+                    console.log('speaking');
+                    if (!resumeBtn.disabled) {
+                        resumeBtn.click();
+                    }
+                })
+                globalSpeakLister.onStopSpeaking(() => {
+                    console.log('stop speaking');
+                    if (!pauseBtn.disabled) {
+                        pauseBtn.click();
+                    }
+                });
+                return globalApp;
+            }
+
+            enableEle(startBtn);
+            disableEle(stopBtn, pauseBtn, resumeBtn, downloadBtn, discardBtn);
+
+            startBtn.addEventListener('click', async () => {
+                initApp(inputSpeakTimeout.value);
+                await globalApp.start({
+                    captures: {
+                        camera: cameraCheckbox.checked,
+                        microphone: microphoneCheckbox.checked,
+                        screen: screenCheckbox.checked,
+                        systemAudio: systemAudioCheckbox.checked,
+                    },
+                });
+            });
+            stopBtn.addEventListener('click', () => globalApp.stop());
+            pauseBtn.addEventListener('click', () => globalApp.pause());
+            resumeBtn.addEventListener('click', () => globalApp.resume());
+            downloadBtn.addEventListener('click', () => globalApp.download());
+            discardBtn.addEventListener('click', () => globalApp.discard());
+
+
+        });
     </script>
 </body>
 
