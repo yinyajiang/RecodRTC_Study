@@ -22,12 +22,16 @@
             height: 100%;
             background-color: rgba(0, 0, 0, 0.5);
         }
+
+        .bg {
+            background: white;
+        }
     </style>
 </head>
 
 <body>
-    <div id="block-head"> Head <br><br><br></div>
-    <div id="block-setting">
+    <div id="block-head" class="bg"> Head <br><br><br></div>
+    <div id="block-setting" class="bg">
         <div>quick start</div>
         <button id="btn-quick-screen">Screen</button>
         <button id="btn-quick-camera">Camera</button>
@@ -43,11 +47,11 @@
             id="display-speak-timeout-value"></span>
         <br><br><br>
     </div>
-    <div id="block-app" class="display-none">
+    <div id="block-app" class="display-none bg">
         <button id="btn-back">back</button><br>
-        <div id="app-page-prepare">Prepare</div>
+        <div id="app-page-prepare" class="bg">Prepare</div>
         <br><br><br>
-        <div id="app-page-record">
+        <div id="app-page-record" class="bg">
             <div id="record-timer">00:00</div>
             <button id="btn-stop">Stop Recording</button>
             <button id="btn-pause">Pause Recording</button>
@@ -66,7 +70,7 @@
         <br><br><br>
         <div id="app-loading">loading...</div>
     </div>
-    <div id="block-description">
+    <div id="block-description" class="bg">
         description
     </div>
     <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
@@ -116,7 +120,7 @@
             onCaptureBefore(callback) {
                 this._addHook('capturebefore', callback);
             }
-            onCaptureAfter(callback) {
+            onCaptureSuccess(callback) {
                 this._addHook('captureafter', callback);
             }
             onCaptureError(callback) {
@@ -316,6 +320,7 @@
                     return streams;
                 } catch (e) {
                     console.error(e);
+                    throw e;
                 }
             }
 
@@ -618,11 +623,33 @@
             }
         }
 
-
-        function addPlayingFlag(element) {
+        function addPlayPauseFun(element) {
             element.onplaying = () => element.__isPlaying = true;
             element.onpause = () => element.__isPlaying = false;
             element.onended = () => element.__isPlaying = false;
+
+            element._PauseFun = () => {
+                if (element.played && element.__isPlaying) {
+                    element.pause();
+                }
+            }
+            element._PlayFun = () => {
+                if (element.paused && !element.__isPlaying) {
+                    element.play();
+                }
+            }
+        }
+
+
+        function setPlaySrc(ele, src, muted) {
+            ele.src = ele.srcObject = null;
+            if (typeof (src) === 'string') {
+                ele.src = blobURL;
+            } else {
+                ele.srcObject = src;
+            }
+            ele.muted = muted;
+            ele.load();
         }
 
 
@@ -738,18 +765,16 @@
             const recordPage = document.querySelector('#app-page-record');
             const videoPreview = document.querySelector('#video-preview');
             const audioPreview = document.querySelector('#audio-preview');
-            addPlayingFlag(videoPreview);
-            addPlayingFlag(audioPreview);
+            addPlayPauseFun(videoPreview);
+            addPlayPauseFun(audioPreview);
 
             function giveup() {
                 if (globalApp) globalApp.discard();
                 showApp(false);
                 showEle(false, recordPage);
                 showEle(true, preparePage);
-                videoPreview.src = videoPreview.srcObject = null;
-                audioPreview.src = audioPreview.srcObject = null;
-                videoPreview.load();
-                audioPreview.load();
+                setPlaySrc(videoPreview, null, true);
+                setPlaySrc(audioPreview, null, true);
             };
 
             globalApp = new MediaRecorderApp();
@@ -774,13 +799,15 @@
                 showEle(true, preparePage, loading);
                 showEle(false, recordPage);
             });
-            globalApp.onCaptureAfter((recordStreams) => {
+            globalApp.onCaptureSuccess((recordStreams) => {
                 showEle(true, recordPage, stopBtn, pauseBtn, resumeBtn);
                 showEle(false, preparePage, downloadBtn, discardBtn);
                 enableEle(true, stopBtn, pauseBtn);
                 enableEle(false, resumeBtn);
             });
             globalApp.onCaptureError((errorObj) => {
+                showEle(false, loading);
+
                 let errorDevices = [];
                 if (errorObj.camera) {
                     errorDevices.push('Camera');
@@ -801,10 +828,8 @@
             globalApp.onClean(() => {
                 speakListen.stop();
                 audioDraw.stop();
-                videoPreview.src = videoPreview.srcObject = null;
-                audioPreview.src = audioPreview.srcObject = null;
-                videoPreview.load();
-                audioPreview.load();
+                setPlaySrc(videoPreview, null, true);
+                setPlaySrc(audioPreview, null, true);
             })
             globalApp.onStart((recordStreams, preview) => {
                 if (inputSpeakTimeout.value && inputSpeakTimeout.value > 0 && recordStreams.microphone) {
@@ -815,9 +840,7 @@
                 }
 
                 if (recordStreams.isVideo && preview) {
-                    videoPreview.src = null;
-                    videoPreview.srcObject = preview;
-                    videoPreview.muted = true;
+                    setPlaySrc(videoPreview, preview, true);
                 }
                 if (!recordStreams.isVideo && preview) {
                     audioDraw.start({
@@ -834,30 +857,20 @@
                 showEle(true, downloadBtn, discardBtn);
                 enableEle(true, discardBtn, downloadBtn);
                 if (isVideo) {
-                    videoPreview.src = videoPreview.srcObject = null;
-                    videoPreview.src = blobURL;
-                    videoPreview.muted = false;
-                    videoPreview.load();
+                    setPlaySrc(videoPreview, blobURL, false);
                 } else {
-                    audioPreview.src = audioPreview.srcObject = null;
-                    audioPreview.src = blobURL;
-                    audioPreview.muted = false;
-                    audioPreview.load();
+                    setPlaySrc(audioPreview, blobURL, false);
                 }
             });
             globalApp.onPause(() => {
                 enableEle(false, pauseBtn);
                 enableEle(true, stopBtn, resumeBtn);
-                if (videoPreview.played && videoPreview.__isPlaying) {
-                    videoPreview.pause();
-                }
+                videoPreview._PauseFun();
             });
             globalApp.onResume(() => {
                 enableEle(false, resumeBtn);
                 enableEle(true, stopBtn, pauseBtn);
-                if (videoPreview.paused && !videoPreview.__isPlaying) {
-                    videoPreview.play();
-                }
+                videoPreview._PlayFun();
             });
             globalApp.onDownload(() => { });
             globalApp.onUpdateRecordTime((time) => recordTime.innerHTML = time);
