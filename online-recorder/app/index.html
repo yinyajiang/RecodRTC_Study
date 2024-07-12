@@ -13,12 +13,63 @@
         .bg {
             background: white;
         }
+
+
+        .app-loader {
+            width: 40px;
+            height: 30px;
+            --c: no-repeat linear-gradient(#000 0 0);
+            background:
+                var(--c) 0 100%/8px 30px,
+                var(--c) 50% 100%/8px 20px,
+                var(--c) 100% 100%/8px 10px;
+            clip-path: inset(-100% 0);
+            position: fixed;
+            bottom: 50%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        .app-loader:before {
+            content: "";
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #000;
+            left: -16px;
+            top: 0;
+            animation:
+                l5-1 2s linear infinite,
+                l5-2 0.5s cubic-bezier(0, 200, .8, 200) infinite;
+        }
+
+        @keyframes l5-1 {
+            0% {
+                left: -16px;
+                transform: translateY(-8px)
+            }
+
+            100% {
+                left: calc(100% + 8px);
+                transform: translateY(22px)
+            }
+        }
+
+        @keyframes l5-2 {
+            100% {
+                top: -0.1px
+            }
+        }
     </style>
 </head>
 
 <body>
     <button id="btn-back">back</button><br>
-    <div id="app-page-prepare" class="bg">Prepare</div>
+    <div id="app-page-prepare" class="bg">
+        Prepare
+        <div id="error-message"></div>
+    </div>
     <br><br><br>
     <div id="app-page-record" class="bg">
         <div id="record-timer">00:00</div>
@@ -26,21 +77,20 @@
         <button id="btn-pause">Pause Recording</button>
         <button id="btn-resume">Resume Recording</button>
         <button id="btn-download">Download</button>
+        <input type="checkbox" id="chk-seekable">seekable </input>
+        <span id="tip-seekable">会耗时</span>
         <button id="btn-discard">Discard</button>
         <button id="btn-retry">Retry</button>
-        <br>
-        <div>
-            <audio autoplay playsinline id="audio-preview"></audio>
-            <video autoplay playsinline id="video-preview" style="width: 200px; height: 200px;">
-            </video>
-            <canvas id="audio-draw-canvas" style="width: 200px; height: 200px; "></canvas>
-        </div>
+        <audio autoplay playsinline id="audio-preview"></audio>
+        <video autoplay playsinline id="video-preview" style="width: 200px; height: 200px;">
+        </video>
+        <canvas id="audio-draw-canvas" style="width: 200px; height: 200px; "></canvas>
     </div>
     <br>
-    <div id="app-loading">loading...</div>
 
     <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
     <script src="https://www.webrtc-experiment.com/hark.js"></script>
+    <script src="https://www.webrtc-experiment.com/EBML.js"></script>
     <script>
         function IsEdge() {
             if (typeof window.__isEdge !== 'undefined') {
@@ -68,9 +118,6 @@
             onStop(callback) {
                 this._addHook('stop', callback);
             }
-            onDownload(callback) {
-                this._addHook('download', callback);
-            }
             onStart(callback) {
                 this._addHook('start', callback);
             }
@@ -79,9 +126,6 @@
             }
             onResume(callback) {
                 this._addHook('resume', callback);
-            }
-            onDiscard(callback) {
-                this._addHook('discard', callback);
             }
             onCaptureBefore(callback) {
                 this._addHook('capturebefore', callback);
@@ -92,27 +136,12 @@
             onCaptureError(callback) {
                 this._addHook('captureerror', callback);
             }
-            onClean(callback) {
-                this._addHook('clean', callback);
-            }
             onUpdateRecordTime(callback) {
                 this._addHook('updateRecordTime', callback);
             }
 
             discard() {
-                this._clean(true);
-                this._callback('discard');
-            }
-
-            clean() {
-                this._clean(false);
-                this._callback('clean')
-            }
-
-            _clean(reset) {
-                this._stop = false;
-                this._blobURL = null;
-                this._close(reset);
+                this._destroy(true);
             }
 
             async start({ captures }) {
@@ -120,22 +149,20 @@
                     console.log('Please select at least one media source to record.');
                     return;
                 }
-                this._clean(true);
+                this._stop = false;
+                this._destroy(false);
 
-                this._ext = "webm"
                 this._callback('capturebefore', captures);
-                this._recordStreams = await this._captureRecordStreams(captures, () => this.stop());
+                this._recordStreams = await this._captureRecordStreams(captures);
                 this._callback('captureafter', this._recordStreams);
 
-                let recordOptions = {};
+                this._recordOptions = {};
                 if (this._recordStreams.isVideo) {
-                    this._ext = "webm"
-                    recordOptions = Object.assign(recordOptions, {
+                    this._recordOptions = Object.assign(this._recordOptions, {
                         type: 'video',
                         mimeType: 'video/webm',
                     });
                 } else {
-                    this._ext = "mp3"
                     let audioOptions = {
                         type: 'audio',
                     };
@@ -143,13 +170,13 @@
                         audioOptions.recorderType = StereoAudioRecorder;
                         audioOptions.numberOfAudioChannels = IsEdge() ? 1 : 2;
                     }
-                    recordOptions = Object.assign(recordOptions, audioOptions);
+                    this._recordOptions = Object.assign(this._recordOptions, audioOptions);
                 }
 
-                recordOptions.previewStream = (preview) => {
-                    this._callback('start', this._recordStreams, preview);
+                this._recordOptions.previewStream = (preview) => {
+                    this._callback('start', { isVideo: this._isRecordVideo(), preview });
                 };
-                this._recorder = RecordRTC(this._recordStreams, recordOptions);
+                this._recorder = RecordRTC(this._recordStreams, this._recordOptions);
 
                 this._recorder.startRecording();
 
@@ -161,25 +188,32 @@
                 this._stop = true;
                 if (!this._recorder) return;
                 this._recorder.stopRecording((blobURL) => {
-                    this._blobURL = blobURL;
-                    const isVideo = this._recordStreams && this._recordStreams.isVideo;
-                    this._close();
-                    this._callback('stop', isVideo, this._blobURL);
+                    this._stopStream();
+                    this._callback('stop', { isVideo: this._isRecordVideo(), blobURL });
                 });
             }
 
-            download() {
-                if (this._blobURL) {
-                    this._saveURLToDisk(this._blobURL, this._ext);
-                    this._callback('download');
+            download(seekable) {
+                if (!this._recorder) return;
+                let blob = this._recorder.getBlob();
+                if (!blob) return;
+                const ext = this._isRecordVideo() ? "webm" : "mp3";
+                if (seekable) {
+                    getSeekableBlob(blob, (seekableBlob) => {
+                        const blobURL = URL.createObjectURL(seekableBlob);
+                        this._saveURLToDisk(blobURL, ext);
+                    });
+                } else {
+                    const blobURL = URL.createObjectURL(blob);
+                    this._saveURLToDisk(blobURL, ext);
                 }
             }
 
             pause() {
                 if (this._recorder) {
+                    this._callback('pause');
                     this._recorder.pauseRecording();
                     this._pauseCalculateTime();
-                    this._callback('pause');
                 }
             }
 
@@ -193,9 +227,9 @@
 
             resume() {
                 if (this._recorder) {
+                    this._callback('resume');
                     this._recorder.resumeRecording();
                     this._startCalculateTime()
-                    this._callback('resume');
                 }
             }
 
@@ -223,7 +257,7 @@
                 }
             }
 
-            async _captureRecordStreams(captures, streamStopCallback) {
+            async _captureRecordStreams(captures) {
                 try {
                     let streams = [];
                     if (captures.screen) {
@@ -276,12 +310,10 @@
                         streams.camera.left = streams.screen.width - streams.camera.width;
                     }
 
-                    if (streamStopCallback) {
-                        if (Array.isArray(streams)) {
-                            streams.forEach(stream => this._addStreamStopListener(stream, streamStopCallback));
-                        } else {
-                            this._addStreamStopListener(streams, streamStopCallback);
-                        }
+                    if (Array.isArray(streams)) {
+                        streams.forEach(stream => this._addStreamStopListener(stream, () => this.stop()));
+                    } else {
+                        this._addStreamStopListener(streams, () => this.stop());
                     }
                     return streams;
                 } catch (e) {
@@ -328,22 +360,22 @@
                 if (!stream || !callback) {
                     return;
                 }
-                stream.addEventListener('ended', function () {
+                stream.addEventListener('ended', () => {
                     callback();
-                    callback = function () { };
+                    callback = () => { };
                 }, false);
-                stream.addEventListener('inactive', function () {
+                stream.addEventListener('inactive', () => {
                     callback();
-                    callback = function () { };
+                    callback = () => { };
                 }, false);
-                stream.getTracks().forEach(function (track) {
-                    track.addEventListener('ended', function () {
+                stream.getTracks().forEach((track) => {
+                    track.addEventListener('ended', () => {
                         callback();
-                        callback = function () { };
+                        callback = () => { };
                     }, false);
-                    track.addEventListener('inactive', function () {
+                    track.addEventListener('inactive', () => {
                         callback();
-                        callback = function () { };
+                        callback = () => { };
                     }, false);
                 });
             }
@@ -383,13 +415,17 @@
                 }
             }
 
-            _close(reset) {
+            _stopStream() {
                 this._stopCalculateTime();
-
                 if (!this._recordStreams) return;
                 const callStop = (obj) => {
                     if (obj && typeof obj.stop === 'function') {
                         obj.stop();
+                    }
+                    if (obj && typeof obj.getTracks === 'function') {
+                        obj.getTracks().forEach(track => {
+                            track.stop();
+                        })
                     }
                 }
                 callStop(this._recordStreams.camera);
@@ -402,20 +438,28 @@
                     }
                     callStop(this._recordStreams);
                 }
+                this._recordStreams = null;
+            };
+
+            _destroy(reset) {
+                this._stopStream();
                 if (reset && this._recorder) {
                     this._recorder.reset();
                 }
                 if (this._recorder) {
                     this._recorder.destroy();
                 }
-                this._recordStreams = null;
                 this._recorder = null;
             };
+
+            _isRecordVideo() {
+                return this._recordOptions && this._recordOptions.type === 'video'
+            }
 
 
             _stopCalculateTime() {
                 this._pauseCalculateTime();
-                this._lastSecs = 0;
+                this._lastMillis = 0;
             }
             _pauseCalculateTime() {
                 if (this._calculateTimer) {
@@ -428,9 +472,9 @@
                     return;
                 }
                 this._startTime = new Date().getTime();
-                if (this._lastSecs) {
-                    this._startTime -= this._lastSecs * 1000;
-                    this._lastSecs = 0;
+                if (this._lastMillis) {
+                    this._startTime -= this._lastMillis;
+                    this._lastMillis = 0;
                 }
                 this._calculateTimer = setInterval(() => this._calculateTime(), 1000);
             }
@@ -438,9 +482,10 @@
                 if (!this._recorder || !this._recordStreams || !this._startTime) {
                     return;
                 }
-                const secs = (new Date().getTime() - this._startTime) / 1000
-                this._lastSecs = secs;
+                const millis = new Date().getTime() - this._startTime;
+                this._lastMillis = millis;
 
+                const secs = millis / 1000;
                 let hr = Math.floor(secs / 3600);
                 let min = Math.floor((secs - (hr * 3600)) / 60);
                 let sec = Math.floor(secs - (hr * 3600) - (min * 60));
@@ -556,7 +601,6 @@
                 this._analyser.getByteFrequencyData(this._dataArray);
                 this._ctx2d.clearRect(0, 0, this._canvas.width, this._canvas.height);
 
-
                 const centerY = this._canvas.height / 2;
                 const startX = (this._canvas.width - (this._barOptions.barWidth + this._barOptions.barSpacing) * this._barOptions.barCount + this._barOptions.barSpacing) / 2;
 
@@ -609,7 +653,7 @@
         function setPlaySrc(ele, src, muted) {
             ele.src = ele.srcObject = null;
             if (typeof (src) === 'string') {
-                ele.src = blobURL;
+                ele.src = src;
             } else {
                 ele.srcObject = src;
             }
@@ -617,66 +661,76 @@
             ele.load();
         }
 
+        function showLoading(bottom) {
+            hideLoading();
+            const apploading = document.createElement('div');
+            apploading.classList.add('app-loader');
+            if (bottom) {
+                apploading.style.bottom = bottom;
+            }
+            document.body.appendChild(apploading);
+        }
+        function hideLoading() {
+            let apploading = document.querySelector('.app-loader');
+            if (apploading) {
+                apploading.remove();
+            }
+        }
 
-        async function initApp() {
+        async function intoRecording() {
             let app = new MediaRecorderApp();
             let audioDraw = new CanvasDrawAudio();
             let speakListen = new SpeakingListener();
 
-
             const microphoneCheck = localStorage.getItem('microphone') == '1';
-            const screenCheck = localStorage.getItem('screen') == '1';
+            const screenCheck = true || localStorage.getItem('screen') == '1';
             const cameraCheck = localStorage.getItem('camera') == '1';
             const systemAudioCheck = localStorage.getItem('systemAudio') == '1';
             const speakTimeout = localStorage.getItem('speakTimeout') ? parseInt(localStorage.getItem('speakTimeout')) : 0;
-
 
             const backBtn = document.querySelector('#btn-back');
             backBtn.onclick = () => {
                 app.discard();
                 window.location.href = "/online-recorder#quick-start";
             }
-
             if (!microphoneCheck && !screenCheck && !cameraCheck && !systemAudioCheck) {
                 clickEle(backBtn);
                 return;
             }
-            const retryBtn = document.querySelector('#btn-retry');
-            retryBtn.onclick = () => {
-                app.discard();
-                window.location.reload();
-            }
 
             const preparePage = document.querySelector('#app-page-prepare');
             const recordPage = document.querySelector('#app-page-record');
-            const videoPreview = document.querySelector('#video-preview');
-            const audioPreview = document.querySelector('#audio-preview');
-            addPlayPauseFun(videoPreview);
-            addPlayPauseFun(audioPreview);
 
             const stopBtn = document.querySelector('#btn-stop');
             const pauseBtn = document.querySelector('#btn-pause');
             const resumeBtn = document.querySelector('#btn-resume');
             const downloadBtn = document.querySelector('#btn-download');
             const discardBtn = document.querySelector('#btn-discard');
+            const retryBtn = document.querySelector('#btn-retry');
+            const seakableCheck = document.querySelector('#chk-seekable');
+            const seakableTip = document.querySelector('#tip-seekable');
 
             const audioCanvas = document.querySelector('#audio-draw-canvas');
             const recordTime = document.querySelector('#record-timer');
-            const inputSpeakTimeout = document.querySelector('#input-speak-time-out');
-            const loading = document.querySelector('#app-loading');
+
+            const videoPreview = document.querySelector('#video-preview');
+            const audioPreview = document.querySelector('#audio-preview');
+            addPlayPauseFun(videoPreview);
+            addPlayPauseFun(audioPreview);
 
             app.onCaptureBefore(() => {
-                showEle(true, preparePage, loading);
                 showEle(false, recordPage);
+                showEle(true, preparePage);
+                showLoading("15%");
             });
             app.onCaptureSuccess((recordStreams) => {
+                hideLoading();
                 showEle(true, recordPage, stopBtn, pauseBtn, resumeBtn);
-                showEle(false, preparePage, downloadBtn, discardBtn);
-                enableEle(true, stopBtn, pauseBtn);
-                enableEle(false, resumeBtn);
+                showEle(false, preparePage, downloadBtn, seakableCheck, seakableTip, discardBtn, retryBtn);
+                enableEle(false, stopBtn, pauseBtn, resumeBtn);
             });
             app.onCaptureError((errorObj) => {
-                showEle(false, loading);
+                hideLoading();
 
                 let errorDevices = [];
                 if (errorObj.camera) {
@@ -692,40 +746,42 @@
                     errorDevices.push('System Audio');
                 }
                 const errorMsg = "Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message;
-                alert(errorMsg);
+                const msgEle = document.querySelector('#error-message');
+                if (msgEle) {
+                    msgEle.innerHTML = errorMsg;
+                } else {
+                    alert(errorMsg);
+                }
             });
+            app.onStart(({ isVideo, preview }) => {
+                enableEle(true, stopBtn, pauseBtn);
+                enableEle(false, resumeBtn);
 
-            app.onClean(() => {
-                speakListen.stop();
-                audioDraw.stop();
-                setPlaySrc(videoPreview, null, true);
-                setPlaySrc(audioPreview, null, true);
-            })
-            app.onStart((recordStreams, preview) => {
-                if (inputSpeakTimeout.value && inputSpeakTimeout.value > 0 && recordStreams.microphone) {
+                if (speakTimeout && speakTimeout > 0 && recordStreams.microphone) {
                     speakListen.listen({
                         stream: preview,
-                        timeoutSeconds: inputSpeakTimeout.value,
+                        timeoutSeconds: speakTimeout,
                     })
                 }
 
-                if (recordStreams.isVideo && preview) {
+                if (isVideo && preview) {
                     setPlaySrc(videoPreview, preview, true);
                 }
-                if (!recordStreams.isVideo && preview) {
+                if (!isVideo && preview) {
                     audioDraw.start({
                         stream: preview,
                         canvas: audioCanvas,
                     });
                 }
             });
-            app.onStop((isVideo, blobURL) => {
+            app.onStop(({ isVideo, blobURL }) => {
+                showEle(false, stopBtn, pauseBtn, resumeBtn, seakableTip);
+                showEle(true, downloadBtn, seakableCheck, discardBtn);
+                seakableCheck.checked = false;
+                enableEle(true, discardBtn, downloadBtn);
+
                 speakListen.stop()
                 audioDraw.stop();
-
-                showEle(false, stopBtn, pauseBtn, resumeBtn);
-                showEle(true, downloadBtn, discardBtn);
-                enableEle(true, discardBtn, downloadBtn);
                 if (isVideo) {
                     setPlaySrc(videoPreview, blobURL, false);
                 } else {
@@ -742,27 +798,44 @@
                 enableEle(true, stopBtn, pauseBtn);
                 videoPreview._PlayFun();
             });
-            app.onDownload(() => { });
             app.onUpdateRecordTime((time) => recordTime.innerHTML = time);
 
             speakListen.onSpeaking(() => {
                 console.log('speaking');
                 if (!resumeBtn.disabled) {
-                    clickEle(resumeBtn);
+                    DispatchClick(resumeBtn);
                 }
             });
             speakListen.onStopSpeaking(() => {
                 console.log('stop speaking');
                 if (!pauseBtn.disabled) {
-                    clickEle(pauseBtn);
+                    DispatchClick(pauseBtn);
                 }
             });
 
             stopBtn.onclick = () => app.stop();
             pauseBtn.onclick = () => app.pause();
             resumeBtn.onclick = () => app.resume();
-            downloadBtn.onclick = () => app.download();
-            discardBtn.onclick = () => app.discard();
+            downloadBtn.onclick = () => app.download(seakableCheck.checked);
+            seakableCheck.onchange = () => {
+                showEle(seakableCheck.checked, seakableTip);
+            }
+            discardBtn.onclick = () => {
+                app.discard();
+                setPlaySrc(videoPreview, null, true);
+                setPlaySrc(audioPreview, null, true);
+
+                recordTime.innerHTML = "00:00";
+
+                showEle(true, retryBtn);
+                showEle(false, stopBtn, pauseBtn, resumeBtn, downloadBtn, seakableTip, seakableCheck, discardBtn);
+                enableEle(true, retryBtn);
+            };
+            retryBtn.onclick = () => {
+                setTimeout(() => {
+                    intoRecording();
+                }, 100);
+            }
 
             await app.start({
                 captures: {
@@ -775,7 +848,7 @@
         }
 
         window.addEventListener('DOMContentLoaded', async () => {
-            await createApp();
+            await intoRecording();
         });
     </script>
 </body>
