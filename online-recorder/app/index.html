@@ -68,9 +68,9 @@
     <button id="btn-back">back</button><br>
     <div id="app-page-prepare" class="bg">
         Prepare
-        <div id="error-message"></div>
+        <div id="error-message">Recording canceled or screen recording permission not granted.</div>
     </div>
-    <br><br><br>
+    <br>
     <div id="app-page-record" class="bg">
         <div id="record-timer">00:00</div>
         <button id="btn-stop">Stop Recording</button>
@@ -746,12 +746,7 @@
                     errorDevices.push('System Audio');
                 }
                 const errorMsg = "Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message;
-                const msgEle = document.querySelector('#error-message');
-                if (msgEle) {
-                    msgEle.innerHTML = errorMsg;
-                } else {
-                    alert(errorMsg);
-                }
+                console.log(errorMsg);
             });
             app.onStart(({ isVideo, preview }) => {
                 enableEle(true, stopBtn, pauseBtn);
