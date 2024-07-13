@@ -18,9 +18,6 @@
             background: white;
         }
 
-        .border-style {
-            border: 2px solid transparent;
-        }
 
 
 
@@ -37,8 +34,8 @@
         }
 
         .blinking-border {
-            border-color: 2px solid red;
-            animation: borderBlink 1s ease-in-out 3;
+            border-color: red;
+            animation: borderBlink 0.7s ease-in-out 2;
             animation-fill-mode: forwards;
         }
     </style>
@@ -51,10 +48,11 @@
         <button id="btn-quick-screen">Screen</button>
         <button id="btn-quick-camera">Camera</button>
         <button id="btn-quick-screen-camera">Screen + Camera</button>
-        <button id="btn-start">Start Recording</button>
+        <div id="btn-start"><a>Start Recording</a></div>
     </div>
 
-    <div>custom devices</div>
+    <div>custom devices <a href="#btn-start">start recording</a></div>
+
     <div id="custom-devices-btn-list" class="border-style">
         <input type="checkbox" id="checkbox-camera" checked> Camera</checkbox>
         <input type="checkbox" id="checkbox-microphone"> Microphone</input>
@@ -73,7 +71,10 @@
         }
         function startBlinkingBorder(selector) {
             const element = document.querySelector(selector);
-            if (!element) return;
+            if (!element) {
+                console.error(`no element found with selector: ${selector}`);
+                return;
+            }
             element.classList.remove('blinking-border');
             element.classList.add('blinking-border');
             element.addEventListener('animationend', function () {
@@ -93,6 +94,12 @@
 
             const inputSpeakTimeout = document.querySelector('#input-speak-time-out');
             const displayTimeoutValue = document.querySelector("#display-speak-timeout-value");
+
+            function removeAllQuickActive() {
+                quickScreenBtn.classList.remove('quick-active');
+                quickCameraBtn.classList.remove('quick-active');
+                quickScreenCameraBtn.classList.remove('quick-active');
+            }
 
 
             /* 快速配置 */
@@ -133,6 +140,20 @@
                 resetAdvancedSetting();
             })
 
+            screenCheckbox.addEventListener('change', () => {
+                removeAllQuickActive();
+            })
+            cameraCheckbox.addEventListener('change', () => {
+                removeAllQuickActive();
+            })
+            microphoneCheckbox.addEventListener('change', () => {
+                removeAllQuickActive();
+            })
+            systemAudioCheckbox.addEventListener('change', () => {
+                removeAllQuickActive();
+            })
+
+
             /* 高级设置 */
             function resetAdvancedSetting() {
                 displayTimeoutValue.innerHTML = 0;
@@ -147,34 +168,43 @@
             })
             inputSpeakTimeout.addEventListener('input', () => {
                 if (inputSpeakTimeout.value > 0) {
-                    microphoneCheckbox.checked = true;
+                    if (!systemAudioCheckbox.checked) {
+                        microphoneCheckbox.checked = true;
+                    }
                 } else {
-                    microphoneCheckbox.checked = false;
+                    if (!systemAudioCheckbox.checked) {
+                        microphoneCheckbox.checked = false;
+                    }
                 }
                 displayTimeoutValue.innerHTML = inputSpeakTimeout.value;
             })
             // 选中默认配置
             setTimeout(() => clickElement(quickScreenBtn), 500);
 
-            //保存参数
-            const starBtn = document.querySelector('#btn-start');
-            starBtn.addEventListener('click', () => {
+
+            const startFunc = (event) => {
+                event.preventDefault();
+
                 localStorage.setItem('microphone', microphoneCheckbox.checked ? '1' : '0');
                 localStorage.setItem('screen', screenCheckbox.checked ? '1' : '0');
                 localStorage.setItem('camera', cameraCheckbox.checked ? '1' : '0');
                 localStorage.setItem('systemAudio', systemAudioCheckbox.checked ? '1' : '0');
                 localStorage.setItem('speakTimeout', inputSpeakTimeout.value + '');
 
-                const emptyAdvice = document.querySelector("#empty-advice");
                 if (!microphoneCheckbox.checked && !screenCheckbox.checked && !cameraCheckbox.checked && !systemAudioCheckbox.checked) {
                     startBlinkingBorder('#quick-btn-list');
                     startBlinkingBorder('#custom-devices-btn-list');
                     return;
                 }
                 window.location.href = "/online-recorder/app";
-            })
+            }
+            const starBtn = document.querySelector('#btn-start a');
+            starBtn.addEventListener('click', startFunc)
+            const startBtn2 = document.querySelector('a[href="#btn-start"]');
+            if (startBtn2) {
+                startBtn2.addEventListener('click', startFunc);
+            }
         }
-
         window.addEventListener('DOMContentLoaded', () => {
             settingListenAndInit();
         });
