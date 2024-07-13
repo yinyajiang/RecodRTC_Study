@@ -17,27 +17,6 @@
         .bg {
             background: white;
         }
-
-
-
-
-        @keyframes borderBlink {
-
-            0%,
-            100% {
-                border-color: rgba(255, 0, 0, 0.2);
-            }
-
-            50% {
-                border-color: rgba(255, 0, 0, 1);
-            }
-        }
-
-        .blinking-border {
-            border-color: red;
-            animation: borderBlink 0.7s ease-in-out 2;
-            animation-fill-mode: forwards;
-        }
     </style>
 </head>
 
@@ -70,16 +49,56 @@
             element.dispatchEvent(event);
         }
         function startBlinkingBorder(selector) {
-            const element = document.querySelector(selector);
-            if (!element) {
-                console.error(`no element found with selector: ${selector}`);
-                return;
+            const targetElement = document.querySelector(selector);
+            if (!targetElement) return;
+
+            // 创建动画边框元素
+            const border = document.createElement('div');
+            border.style.cssText = `
+    position: fixed;
+    pointer-events: none;
+    border-radius: 5px;
+    animation: breathe 2s ease-in-out;
+    z-index: 9999;
+  `;
+
+            // 添加动画样式
+            const style = document.createElement('style');
+            style.textContent = `
+    @keyframes breathe {
+      0% { box-shadow: 0 0 0 0 rgba(255, 84, 84, 0.7); }
+      50% { box-shadow: 0 0 0 3px rgba(255, 84, 84, 0.7); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 84, 84, 0); }
+    }
+  `;
+            document.head.appendChild(style);
+
+            // 更新边框位置的函数
+            function updateBorderPosition() {
+                const rect = targetElement.getBoundingClientRect();
+                border.style.top = `${rect.top - 5}px`;
+                border.style.left = `${rect.left - 5}px`;
+                border.style.width = `${rect.width + 10}px`;
+                border.style.height = `${rect.height + 10}px`;
             }
-            element.classList.remove('blinking-border');
-            element.classList.add('blinking-border');
-            element.addEventListener('animationend', function () {
-                element.classList.remove('blinking-border');
-            }, { once: true });
+
+            // 初始设置边框位置
+            updateBorderPosition();
+
+            // 添加边框到body
+            document.body.appendChild(border);
+
+            // 监听滚动和调整大小事件
+            window.addEventListener('scroll', updateBorderPosition);
+            window.addEventListener('resize', updateBorderPosition);
+
+            // 2秒后移除效果
+            setTimeout(() => {
+                document.body.removeChild(border);
+                document.head.removeChild(style);
+                window.removeEventListener('scroll', updateBorderPosition);
+                window.removeEventListener('resize', updateBorderPosition);
+            }, 2000);
         }
 
         function settingListenAndInit() {
@@ -179,7 +198,7 @@
                 displayTimeoutValue.innerHTML = inputSpeakTimeout.value;
             })
             // 选中默认配置
-            setTimeout(() => clickElement(quickScreenBtn), 500);
+            setTimeout(() => clickElement(quickScreenBtn), 100);
 
 
             const startFunc = (event) => {
