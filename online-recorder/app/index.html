@@ -61,6 +61,78 @@
                 top: -0.1px
             }
         }
+
+        .checkbox-wrapper-3 input[type="checkbox"] {
+            visibility: hidden;
+            display: none;
+        }
+
+        .checkbox-wrapper-3 .toggle {
+            position: relative;
+            display: block;
+            width: 40px;
+            height: 20px;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transform: translate3d(0, 0, 0);
+        }
+
+        .checkbox-wrapper-3 .toggle:before {
+            content: "";
+            position: relative;
+            top: 3px;
+            left: 3px;
+            width: 34px;
+            height: 14px;
+            display: block;
+            background: #9A9999;
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .checkbox-wrapper-3 .toggle span {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 20px;
+            height: 20px;
+            display: block;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 3px 8px rgba(154, 153, 153, 0.5);
+            transition: all 0.2s ease;
+        }
+
+        .checkbox-wrapper-3 .toggle span:before {
+            content: "";
+            position: absolute;
+            display: block;
+            margin: -18px;
+            width: 56px;
+            height: 56px;
+            background: rgba(79, 46, 220, 0.5);
+            border-radius: 50%;
+            transform: scale(0);
+            opacity: 1;
+            pointer-events: none;
+        }
+
+        .checkbox-wrapper-3 #chk-seekable:checked+.toggle:before {
+            background: #947ADA;
+        }
+
+        .checkbox-wrapper-3 #chk-seekable:checked+.toggle span {
+            background: #4F2EDC;
+            transform: translateX(20px);
+            transition: all 0.2s cubic-bezier(0.8, 0.4, 0.3, 1.25), background 0.15s ease;
+            box-shadow: 0 3px 8px rgba(79, 46, 220, 0.2);
+        }
+
+        .checkbox-wrapper-3 #chk-seekable:checked+.toggle span:before {
+            transform: scale(1);
+            opacity: 0;
+            transition: all 0.4s ease;
+        }
     </style>
 </head>
 
@@ -72,780 +144,843 @@
     </div>
     <br>
     <div id="app-page-record" class="bg">
-        <div id="record-timer">00:00</div>
-        <button id="btn-stop">Stop Recording</button>
-        <button id="btn-pause">Pause Recording</button>
-        <button id="btn-resume">Resume Recording</button>
-        <button id="btn-download">Download</button>
-        <input type="checkbox" id="chk-seekable">seekable </input>
-        <span id="tip-seekable">会耗时</span>
-        <button id="btn-discard">Discard</button>
-        <button id="btn-retry">Retry</button>
-        <audio autoplay playsinline id="audio-preview"></audio>
-        <video autoplay playsinline id="video-preview" style="width: 200px; height: 200px;">
-        </video>
-        <canvas id="audio-draw-canvas" style="width: 200px; height: 200px; "></canvas>
-    </div>
-    <br>
+        <div id="record-timer">
+            <div class="uagb-heading-text">00:00</div>
+            <button id="btn-stop">Stop Recording</button>
+            <button id="btn-pause">Pause Recording</button>
+            <button id="btn-resume">Resume Recording</button>
+            <button id="btn-download">Download</button>
+            <div id="chk-seekable-container">
+                <div class="checkbox-wrapper-3">
+                    <input type="checkbox" id="chk-seekable" />
+                    <label for="chk-seekable" class="toggle"><span></span></label>
+                </div>
+                <div id="seekable-toolstip">toolstip</div>
+            </div>
+            <button id="btn-discard">Discard</button>
+            <button id="btn-retry">Retry</button>
 
-    <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
-    <script src="https://www.webrtc-experiment.com/hark.js"></script>
-    <script src="https://www.webrtc-experiment.com/EBML.js"></script>
-    <script>
-        function IsEdge() {
-            if (typeof window.__isEdge !== 'undefined') {
+            <video autoplay playsinline id="video-preview" style="width: 200px; height: 200px;">
+            </video>
+            <audio autoplay playsinline id="audio-preview"></audio>
+            <canvas id="audio-draw-canvas" style="width: 200px; height: 200px; "></canvas>
+        </div>
+        <br>
+
+        <script src="https://www.WebRTC-Experiment.com/RecordRTC.js"></script>
+        <script src="https://www.webrtc-experiment.com/hark.js"></script>
+        <script src="https://www.webrtc-experiment.com/EBML.js"></script>
+        <script src="https://unpkg.com/@popperjs/core@2"></script>
+        <script src="https://unpkg.com/tippy.js@6"></script>
+
+        <script>
+            function IsEdge() {
+                if (typeof window.__isEdge !== 'undefined') {
+                    return window.__isEdge;
+                }
+                window.__isEdge = navigator.userAgent.indexOf('Edge') !== -1 && (!!navigator.msSaveOrOpenBlob || !!navigator.msSaveBlob);
                 return window.__isEdge;
             }
-            window.__isEdge = navigator.userAgent.indexOf('Edge') !== -1 && (!!navigator.msSaveOrOpenBlob || !!navigator.msSaveBlob);
-            return window.__isEdge;
-        }
 
-        function IsSafari() {
-            if (typeof window.__isSafari !== 'undefined') {
+            function IsSafari() {
+                if (typeof window.__isSafari !== 'undefined') {
+                    return window.__isSafari;
+                }
+                window.__isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
                 return window.__isSafari;
             }
-            window.__isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-            return window.__isSafari;
-        }
 
-        function DispatchClick(element) {
-            let event = document.createEvent('Event');
-            event.initEvent('click', true, true);
-            element.dispatchEvent(event);
-        }
-
-        class MediaRecorderApp {
-            onStop(callback) {
-                this._addHook('stop', callback);
-            }
-            onStart(callback) {
-                this._addHook('start', callback);
-            }
-            onPause(callback) {
-                this._addHook('pause', callback);
-            }
-            onResume(callback) {
-                this._addHook('resume', callback);
-            }
-            onCaptureBefore(callback) {
-                this._addHook('capturebefore', callback);
-            }
-            onCaptureSuccess(callback) {
-                this._addHook('captureafter', callback);
-            }
-            onCaptureError(callback) {
-                this._addHook('captureerror', callback);
-            }
-            onUpdateRecordTime(callback) {
-                this._addHook('updateRecordTime', callback);
+            function DispatchClick(element) {
+                let event = document.createEvent('Event');
+                event.initEvent('click', true, true);
+                element.dispatchEvent(event);
             }
 
-            discard() {
-                this._destroy(true);
-            }
-
-            async start({ captures }) {
-                if (!captures.camera && !captures.microphone && !captures.screen && !captures.systemAudio) {
-                    console.log('Please select at least one media source to record.');
-                    return;
+            class MediaRecorderApp {
+                onStop(callback) {
+                    this._addHook('stop', callback);
                 }
-                this._stop = false;
-                this._destroy(false);
+                onStart(callback) {
+                    this._addHook('start', callback);
+                }
+                onPause(callback) {
+                    this._addHook('pause', callback);
+                }
+                onResume(callback) {
+                    this._addHook('resume', callback);
+                }
+                onCaptureBefore(callback) {
+                    this._addHook('capturebefore', callback);
+                }
+                onCaptureSuccess(callback) {
+                    this._addHook('captureafter', callback);
+                }
+                onCaptureError(callback) {
+                    this._addHook('captureerror', callback);
+                }
+                onUpdateRecordTime(callback) {
+                    this._addHook('updateRecordTime', callback);
+                }
 
-                this._callback('capturebefore', captures);
-                this._recordStreams = await this._captureRecordStreams(captures);
-                this._callback('captureafter', this._recordStreams);
+                discard() {
+                    this._destroy(true);
+                }
 
-                this._recordOptions = {};
-                if (this._recordStreams.isVideo) {
-                    this._recordOptions = Object.assign(this._recordOptions, {
-                        type: 'video',
-                        mimeType: 'video/webm',
-                    });
-                } else {
-                    let audioOptions = {
-                        type: 'audio',
+                async start({ captures }) {
+                    if (!captures.camera && !captures.microphone && !captures.screen && !captures.systemAudio) {
+                        console.log('Please select at least one media source to record.');
+                        return;
+                    }
+                    this._stop = false;
+                    this._destroy(false);
+
+                    this._callback('capturebefore', captures);
+                    this._recordStreams = await this._captureRecordStreams(captures);
+                    this._callback('captureafter', this._recordStreams);
+
+                    this._recordOptions = {};
+                    if (this._recordStreams.isVideo) {
+                        this._recordOptions = Object.assign(this._recordOptions, {
+                            type: 'video',
+                            mimeType: 'video/webm',
+                            video: {
+                                width: 1920,
+                                height: 1080,
+                                frameRate: 30,
+                            }
+                        });
+                    } else {
+                        let audioOptions = {
+                            type: 'audio',
+                        };
+                        if (IsSafari() || IsEdge()) {
+                            audioOptions.recorderType = StereoAudioRecorder;
+                            audioOptions.numberOfAudioChannels = IsEdge() ? 1 : 2;
+                        }
+                        this._recordOptions = Object.assign(this._recordOptions, audioOptions);
+                    }
+
+                    this._recordOptions.previewStream = (preview) => {
+                        this._callback('start', { isVideo: this._isRecordVideo(), preview });
                     };
-                    if (IsSafari() || IsEdge()) {
-                        audioOptions.recorderType = StereoAudioRecorder;
-                        audioOptions.numberOfAudioChannels = IsEdge() ? 1 : 2;
-                    }
-                    this._recordOptions = Object.assign(this._recordOptions, audioOptions);
+                    this._recorder = RecordRTC(this._recordStreams, this._recordOptions);
+
+                    this._recorder.startRecording();
+
+                    this._startCalculateTime();
                 }
 
-                this._recordOptions.previewStream = (preview) => {
-                    this._callback('start', { isVideo: this._isRecordVideo(), preview });
+                stop() {
+                    if (this._stop) return;
+                    this._stop = true;
+                    if (!this._recorder) return;
+                    this._recorder.stopRecording((blobURL) => {
+                        this._stopStream();
+                        this._callback('stop', { isVideo: this._isRecordVideo(), blobURL });
+                    });
+                }
+
+                async download(seekable) {
+                    return new Promise((resolve, reject) => {
+                        if (!this._recorder) {
+                            reject("recorder is not ready yet");
+                            return;
+                        }
+                        let blob = this._recorder.getBlob();
+                        if (!blob) {
+                            reject("blob is not ready yet");
+                            return;
+                        };
+                        const ext = this._isRecordVideo() ? "webm" : "mp3";
+                        if (seekable) {
+                            getSeekableBlob(blob, (seekableBlob) => {
+                                const blobURL = URL.createObjectURL(seekableBlob);
+                                this._saveURLToDisk(blobURL, ext);
+                                resolve();
+                            });
+                        } else {
+                            const blobURL = URL.createObjectURL(blob);
+                            this._saveURLToDisk(blobURL, ext);
+                            resolve();
+                        }
+                    })
+
+
+                }
+
+                pause() {
+                    if (this._recorder) {
+                        this._callback('pause');
+                        this._recorder.pauseRecording();
+                        this._pauseCalculateTime();
+                    }
+                }
+
+                state() {
+                    return this._recorder.getState();
+                }
+
+                blog() {
+                    return this._recorder.getBlob();
+                }
+
+                resume() {
+                    if (this._recorder) {
+                        this._callback('resume');
+                        this._recorder.resumeRecording();
+                        this._startCalculateTime()
+                    }
+                }
+
+                _addHook(event, callback) {
+                    if (!event || !callback) return;
+                    if (!this._hooks) {
+                        this._hooks = {};
+                    }
+                    if (!this._hooks[event]) {
+                        this._hooks[event] = [];
+                    }
+                    this._hooks[event].push(callback);
+                }
+
+                _hasHook(event) {
+                    if (!event || !this._hooks) return false;
+                    return !!this._hooks[event];
+                }
+
+                _callback(event, ...args) {
+                    if (!event || !this._hooks) return;
+                    const callbacks = this._hooks[event];
+                    if (callbacks) {
+                        callbacks.forEach(callback => callback(...args));
+                    }
+                }
+
+                async _captureRecordStreams(captures) {
+                    try {
+                        let streams = [];
+                        if (captures.screen) {
+                            const screen = await this._getDisplayMedia({ video: true, audio: captures.systemAudio });
+                            streams.screen = screen;
+                            streams.isVideo = true;
+                            streams.systemAudio = captures.systemAudio;
+                            streams.push(screen);
+
+                            const keepStreamActive = document.createElement('video');
+                            keepStreamActive.muted = true;
+                            keepStreamActive.srcObject = screen;
+                            keepStreamActive.style.display = 'none';
+                            (document.body || document.documentElement).appendChild(keepStreamActive);
+                            this.onStop(() => {
+                                keepStreamActive.srcObject = null;
+                                (document.body || document.documentElement).removeChild(keepStreamActive);
+                            })
+                        }
+                        if (!streams.systemAudio && captures.systemAudio) {
+                            const systemAudio = await this._getDisplayMedia({ audio: true });
+                            streams.systemAudio = systemAudio;
+                            streams.push(systemAudio);
+                        }
+                        if (captures.camera) {
+                            const camera = await this._getUserMedia({ video: true, audio: captures.microphone });
+                            streams.camera = camera;
+                            streams.isVideo = true;
+                            streams.microphone = captures.microphone;
+                            streams.push(camera);
+                        }
+                        if (!streams.microphone && captures.microphone) {
+                            const microphone = await this._getUserMedia({ audio: true })
+                            streams.microphone = microphone
+                            streams.push(microphone);
+                        }
+                        if (streams.screen && streams.camera) {
+                            streams.screen.width = window.screen.width;
+                            streams.screen.height = window.screen.height;
+                            streams.screen.fullcanvas = true;
+                            streams.camera.width = 320;
+                            streams.camera.height = 240;
+                            if (streams.camera.width > streams.screen.width / 3) {
+                                streams.camera.width = streams.screen.width / 3;
+                            }
+                            if (streams.camera.height > streams.screen.height / 3) {
+                                streams.camera.height = streams.screen.height / 3;
+                            }
+                            streams.camera.top = streams.screen.height - streams.camera.height;
+                            streams.camera.left = streams.screen.width - streams.camera.width;
+                        }
+
+                        if (Array.isArray(streams)) {
+                            streams.forEach(stream => this._addStreamStopListener(stream, () => this.stop()));
+                        } else {
+                            this._addStreamStopListener(streams, () => this.stop());
+                        }
+                        return streams;
+                    } catch (e) {
+                        console.error(e);
+                        throw e;
+                    }
+                }
+
+                async _getUserMedia(constraints) {
+                    if (typeof navigator.mediaDevices === 'undefined' || !navigator.mediaDevices.getUserMedia) {
+                        alert('This browser does not supports WebRTC getUserMedia API.');
+                        throw new Error('getUserMedia is not supported by this browser');
+                    }
+                    try {
+                        return await navigator.mediaDevices.getUserMedia(constraints);
+                    } catch (e) {
+                        this._callback('captureerror', {
+                            error: e,
+                            camera: constraints.video,
+                            microphone: constraints.audio,
+                        });
+                        throw e;
+                    }
+                }
+
+                async _getDisplayMedia(constraints) {
+                    if (!navigator.getDisplayMedia && !navigator.mediaDevices.getDisplayMedia) {
+                        alert('This browser does not supports WebRTC getDisplayMedia API.');
+                        throw new Error('getDisplayMedia is not supported by this browser');
+                    }
+                    try {
+                        return await navigator.mediaDevices.getDisplayMedia(constraints);
+                    } catch (e) {
+                        this._callback('captureerror', {
+                            error: e,
+                            screen: constraints.video,
+                            systemAudio: constraints.audio,
+                        });
+                        throw e;
+                    }
+                }
+
+                _addStreamStopListener(stream, callback) {
+                    if (!stream || !callback) {
+                        return;
+                    }
+                    stream.addEventListener('ended', () => {
+                        callback();
+                        callback = () => { };
+                    }, false);
+                    stream.addEventListener('inactive', () => {
+                        callback();
+                        callback = () => { };
+                    }, false);
+                    stream.getTracks().forEach((track) => {
+                        track.addEventListener('ended', () => {
+                            callback();
+                            callback = () => { };
+                        }, false);
+                        track.addEventListener('inactive', () => {
+                            callback();
+                            callback = () => { };
+                        }, false);
+                    });
+                }
+
+                _saveURLToDisk(fileURL, ext, prefix = "redord-") {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = (now.getMonth() + 1).toString().padStart(2, '0'); // 月份从0开始，需要加1
+                    const day = now.getDate().toString().padStart(2, '0');
+                    const hours = now.getHours().toString().padStart(2, '0');
+                    const minutes = now.getMinutes().toString().padStart(2, '0');
+                    const seconds = now.getSeconds().toString().padStart(2, '0');
+                    const formattedDateTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                    const fileName = prefix + formattedDateTime + '.' + ext;
+
+                    // for non-IE
+                    if (!window.ActiveXObject) {
+                        let save = document.createElement('a');
+                        save.href = fileURL;
+                        save.download = fileName || 'unknown';
+                        save.style = 'display:none;opacity:0;color:transparent;';
+                        (document.body || document.documentElement).appendChild(save);
+                        if (typeof save.click === 'function') {
+                            save.click();
+                        } else {
+                            save.target = '_blank';
+                            DispatchClick(save);
+                        }
+                        (window.URL || window.webkitURL).revokeObjectURL(save.href);
+                    }
+                    // for IE
+                    else if (!!window.ActiveXObject && document.execCommand) {
+                        let _window = window.open(fileURL, '_blank');
+                        _window.document.close();
+                        _window.document.execCommand('SaveAs', true, fileName || fileURL)
+                        _window.close();
+                    }
+                }
+
+                _stopStream() {
+                    this._stopCalculateTime();
+                    if (!this._recordStreams) return;
+                    const callStop = (obj) => {
+                        if (obj && typeof obj.stop === 'function') {
+                            obj.stop();
+                        }
+                        if (obj && typeof obj.getTracks === 'function') {
+                            obj.getTracks().forEach(track => {
+                                track.stop();
+                            })
+                        }
+                    }
+                    callStop(this._recordStreams.camera);
+                    callStop(this._recordStreams.microphone);
+                    callStop(this._recordStreams.screen);
+                    callStop(this._recordStreams.systemAudio);
+                    if (Array.isArray(this.recordStreams)) {
+                        for (const stream of this._recordStreams) {
+                            callStop(stream)
+                        }
+                        callStop(this._recordStreams);
+                    }
+                    this._recordStreams = null;
                 };
-                this._recorder = RecordRTC(this._recordStreams, this._recordOptions);
 
-                this._recorder.startRecording();
-
-                this._startCalculateTime();
-            }
-
-            stop() {
-                if (this._stop) return;
-                this._stop = true;
-                if (!this._recorder) return;
-                this._recorder.stopRecording((blobURL) => {
+                _destroy(reset) {
                     this._stopStream();
-                    this._callback('stop', { isVideo: this._isRecordVideo(), blobURL });
-                });
-            }
+                    if (reset && this._recorder) {
+                        this._recorder.reset();
+                    }
+                    if (this._recorder) {
+                        this._recorder.destroy();
+                    }
+                    this._recorder = null;
+                };
 
-            download(seekable) {
-                if (!this._recorder) return;
-                let blob = this._recorder.getBlob();
-                if (!blob) return;
-                const ext = this._isRecordVideo() ? "webm" : "mp3";
-                if (seekable) {
-                    getSeekableBlob(blob, (seekableBlob) => {
-                        const blobURL = URL.createObjectURL(seekableBlob);
-                        this._saveURLToDisk(blobURL, ext);
-                    });
-                } else {
-                    const blobURL = URL.createObjectURL(blob);
-                    this._saveURLToDisk(blobURL, ext);
+                _isRecordVideo() {
+                    return this._recordOptions && this._recordOptions.type === 'video'
                 }
-            }
 
-            pause() {
-                if (this._recorder) {
-                    this._callback('pause');
-                    this._recorder.pauseRecording();
+
+                _stopCalculateTime() {
                     this._pauseCalculateTime();
-                }
-            }
-
-            state() {
-                return this._recorder.getState();
-            }
-
-            blog() {
-                return this._recorder.getBlob();
-            }
-
-            resume() {
-                if (this._recorder) {
-                    this._callback('resume');
-                    this._recorder.resumeRecording();
-                    this._startCalculateTime()
-                }
-            }
-
-            _addHook(event, callback) {
-                if (!event || !callback) return;
-                if (!this._hooks) {
-                    this._hooks = {};
-                }
-                if (!this._hooks[event]) {
-                    this._hooks[event] = [];
-                }
-                this._hooks[event].push(callback);
-            }
-
-            _hasHook(event) {
-                if (!event || !this._hooks) return false;
-                return !!this._hooks[event];
-            }
-
-            _callback(event, ...args) {
-                if (!event || !this._hooks) return;
-                const callbacks = this._hooks[event];
-                if (callbacks) {
-                    callbacks.forEach(callback => callback(...args));
-                }
-            }
-
-            async _captureRecordStreams(captures) {
-                try {
-                    let streams = [];
-                    if (captures.screen) {
-                        const screen = await this._getDisplayMedia({ video: true, audio: captures.systemAudio });
-                        streams.screen = screen;
-                        streams.isVideo = true;
-                        streams.systemAudio = captures.systemAudio;
-                        streams.push(screen);
-
-                        const keepStreamActive = document.createElement('video');
-                        keepStreamActive.muted = true;
-                        keepStreamActive.srcObject = screen;
-                        keepStreamActive.style.display = 'none';
-                        (document.body || document.documentElement).appendChild(keepStreamActive);
-                        this.onStop(() => {
-                            keepStreamActive.srcObject = null;
-                            (document.body || document.documentElement).removeChild(keepStreamActive);
-                        })
-                    }
-                    if (!streams.systemAudio && captures.systemAudio) {
-                        const systemAudio = await this._getDisplayMedia({ audio: true });
-                        streams.systemAudio = systemAudio;
-                        streams.push(systemAudio);
-                    }
-                    if (captures.camera) {
-                        const camera = await this._getUserMedia({ video: true, audio: captures.microphone });
-                        streams.camera = camera;
-                        streams.isVideo = true;
-                        streams.microphone = captures.microphone;
-                        streams.push(camera);
-                    }
-                    if (!streams.microphone && captures.microphone) {
-                        const microphone = await this._getUserMedia({ audio: true })
-                        streams.microphone = microphone
-                        streams.push(microphone);
-                    }
-                    if (streams.screen && streams.camera) {
-                        streams.screen.width = window.screen.width;
-                        streams.screen.height = window.screen.height;
-                        streams.screen.fullcanvas = true;
-                        streams.camera.width = 320;
-                        streams.camera.height = 240;
-                        if (streams.camera.width > streams.screen.width / 3) {
-                            streams.camera.width = streams.screen.width / 3;
-                        }
-                        if (streams.camera.height > streams.screen.height / 3) {
-                            streams.camera.height = streams.screen.height / 3;
-                        }
-                        streams.camera.top = streams.screen.height - streams.camera.height;
-                        streams.camera.left = streams.screen.width - streams.camera.width;
-                    }
-
-                    if (Array.isArray(streams)) {
-                        streams.forEach(stream => this._addStreamStopListener(stream, () => this.stop()));
-                    } else {
-                        this._addStreamStopListener(streams, () => this.stop());
-                    }
-                    return streams;
-                } catch (e) {
-                    console.error(e);
-                    throw e;
-                }
-            }
-
-            async _getUserMedia(constraints) {
-                if (typeof navigator.mediaDevices === 'undefined' || !navigator.mediaDevices.getUserMedia) {
-                    alert('This browser does not supports WebRTC getUserMedia API.');
-                    throw new Error('getUserMedia is not supported by this browser');
-                }
-                try {
-                    return await navigator.mediaDevices.getUserMedia(constraints);
-                } catch (e) {
-                    this._callback('captureerror', {
-                        error: e,
-                        camera: constraints.video,
-                        microphone: constraints.audio,
-                    });
-                    throw e;
-                }
-            }
-
-            async _getDisplayMedia(constraints) {
-                if (!navigator.getDisplayMedia && !navigator.mediaDevices.getDisplayMedia) {
-                    alert('This browser does not supports WebRTC getDisplayMedia API.');
-                    throw new Error('getDisplayMedia is not supported by this browser');
-                }
-                try {
-                    return await navigator.mediaDevices.getDisplayMedia(constraints);
-                } catch (e) {
-                    this._callback('captureerror', {
-                        error: e,
-                        screen: constraints.video,
-                        systemAudio: constraints.audio,
-                    });
-                    throw e;
-                }
-            }
-
-            _addStreamStopListener(stream, callback) {
-                if (!stream || !callback) {
-                    return;
-                }
-                stream.addEventListener('ended', () => {
-                    callback();
-                    callback = () => { };
-                }, false);
-                stream.addEventListener('inactive', () => {
-                    callback();
-                    callback = () => { };
-                }, false);
-                stream.getTracks().forEach((track) => {
-                    track.addEventListener('ended', () => {
-                        callback();
-                        callback = () => { };
-                    }, false);
-                    track.addEventListener('inactive', () => {
-                        callback();
-                        callback = () => { };
-                    }, false);
-                });
-            }
-
-            _saveURLToDisk(fileURL, ext, prefix = "redord-") {
-                const now = new Date();
-                const year = now.getFullYear();
-                const month = (now.getMonth() + 1).toString().padStart(2, '0'); // 月份从0开始，需要加1
-                const day = now.getDate().toString().padStart(2, '0');
-                const hours = now.getHours().toString().padStart(2, '0');
-                const minutes = now.getMinutes().toString().padStart(2, '0');
-                const seconds = now.getSeconds().toString().padStart(2, '0');
-                const formattedDateTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-                const fileName = prefix + formattedDateTime + '.' + ext;
-
-                // for non-IE
-                if (!window.ActiveXObject) {
-                    let save = document.createElement('a');
-                    save.href = fileURL;
-                    save.download = fileName || 'unknown';
-                    save.style = 'display:none;opacity:0;color:transparent;';
-                    (document.body || document.documentElement).appendChild(save);
-                    if (typeof save.click === 'function') {
-                        save.click();
-                    } else {
-                        save.target = '_blank';
-                        DispatchClick(save);
-                    }
-                    (window.URL || window.webkitURL).revokeObjectURL(save.href);
-                }
-                // for IE
-                else if (!!window.ActiveXObject && document.execCommand) {
-                    let _window = window.open(fileURL, '_blank');
-                    _window.document.close();
-                    _window.document.execCommand('SaveAs', true, fileName || fileURL)
-                    _window.close();
-                }
-            }
-
-            _stopStream() {
-                this._stopCalculateTime();
-                if (!this._recordStreams) return;
-                const callStop = (obj) => {
-                    if (obj && typeof obj.stop === 'function') {
-                        obj.stop();
-                    }
-                    if (obj && typeof obj.getTracks === 'function') {
-                        obj.getTracks().forEach(track => {
-                            track.stop();
-                        })
-                    }
-                }
-                callStop(this._recordStreams.camera);
-                callStop(this._recordStreams.microphone);
-                callStop(this._recordStreams.screen);
-                callStop(this._recordStreams.systemAudio);
-                if (Array.isArray(this.recordStreams)) {
-                    for (const stream of this._recordStreams) {
-                        callStop(stream)
-                    }
-                    callStop(this._recordStreams);
-                }
-                this._recordStreams = null;
-            };
-
-            _destroy(reset) {
-                this._stopStream();
-                if (reset && this._recorder) {
-                    this._recorder.reset();
-                }
-                if (this._recorder) {
-                    this._recorder.destroy();
-                }
-                this._recorder = null;
-            };
-
-            _isRecordVideo() {
-                return this._recordOptions && this._recordOptions.type === 'video'
-            }
-
-
-            _stopCalculateTime() {
-                this._pauseCalculateTime();
-                this._lastMillis = 0;
-            }
-            _pauseCalculateTime() {
-                if (this._calculateTimer) {
-                    clearTimeout(this._calculateTimer);
-                    this._calculateTimer = null;
-                }
-            }
-            _startCalculateTime() {
-                if (!this._recorder || !this._recordStreams) {
-                    return;
-                }
-                this._startTime = new Date().getTime();
-                if (this._lastMillis) {
-                    this._startTime -= this._lastMillis;
                     this._lastMillis = 0;
                 }
-                this._calculateTimer = setInterval(() => this._calculateTime(), 1000);
+                _pauseCalculateTime() {
+                    if (this._calculateTimer) {
+                        clearTimeout(this._calculateTimer);
+                        this._calculateTimer = null;
+                    }
+                }
+                _startCalculateTime() {
+                    if (!this._recorder || !this._recordStreams) {
+                        return;
+                    }
+                    this._startTime = new Date().getTime();
+                    if (this._lastMillis) {
+                        this._startTime -= this._lastMillis;
+                        this._lastMillis = 0;
+                    }
+                    this._calculateTimer = setInterval(() => this._calculateTime(), 1000);
+                }
+                _calculateTime() {
+                    if (!this._recorder || !this._recordStreams || !this._startTime) {
+                        return;
+                    }
+                    const millis = new Date().getTime() - this._startTime;
+                    this._lastMillis = millis;
+
+                    const secs = millis / 1000;
+                    let hr = Math.floor(secs / 3600);
+                    let min = Math.floor((secs - (hr * 3600)) / 60);
+                    let sec = Math.floor(secs - (hr * 3600) - (min * 60));
+                    if (min < 10) {
+                        min = "0" + min;
+                    }
+                    if (sec < 10) {
+                        sec = "0" + sec;
+                    }
+                    if (hr <= 0) {
+                        this._callback('updateRecordTime', `${min}:${sec}`);
+                    } else {
+                        this._callback('updateRecordTime', `${hr}:${min}:${sec}`);
+                    }
+                }
             }
-            _calculateTime() {
-                if (!this._recorder || !this._recordStreams || !this._startTime) {
-                    return;
-                }
-                const millis = new Date().getTime() - this._startTime;
-                this._lastMillis = millis;
-
-                const secs = millis / 1000;
-                let hr = Math.floor(secs / 3600);
-                let min = Math.floor((secs - (hr * 3600)) / 60);
-                let sec = Math.floor(secs - (hr * 3600) - (min * 60));
-                if (min < 10) {
-                    min = "0" + min;
-                }
-                if (sec < 10) {
-                    sec = "0" + sec;
-                }
-                if (hr <= 0) {
-                    this._callback('updateRecordTime', `${min}:${sec}`);
-                } else {
-                    this._callback('updateRecordTime', `${hr}:${min}:${sec}`);
-                }
-            }
-        }
 
 
-        class SpeakingListener {
-            listen({ stream, timeoutSeconds }) {
-                this._timeoutHandle;
-                this._hark = hark(stream, {});
-                this._hark.on('speaking', () => {
+            class SpeakingListener {
+                listen({ stream, timeoutSeconds }) {
+                    this._timeoutHandle;
+                    this._hark = hark(stream, {});
+                    this._hark.on('speaking', () => {
+                        if (this._timeoutHandle) {
+                            clearTimeout(this._timeoutHandle);
+                            this._timeoutHandle = null;
+                        }
+                        if (this._speakingHooks) {
+                            this._speakingHooks.forEach(callback => callback());
+                        }
+                    });
+                    this._hark.on('stopped_speaking', () => {
+                        this._timeoutHandle = setTimeout(() => {
+                            if (this._stopSpeakingHooks) {
+                                this._stopSpeakingHooks.forEach(callback => callback());
+                            }
+                        }, timeoutSeconds * 1000);
+                    });
+                }
+
+                stop() {
+                    if (this._hark) {
+                        this._hark.stop();
+                        this._hark = null;
+                    }
                     if (this._timeoutHandle) {
                         clearTimeout(this._timeoutHandle);
                         this._timeoutHandle = null;
                     }
+                }
+                onSpeaking(callback) {
                     if (this._speakingHooks) {
-                        this._speakingHooks.forEach(callback => callback());
+                        this._speakingHooks.push(callback);
+                    } else {
+                        this._speakingHooks = [callback];
+                    }
+                }
+                onStopSpeaking(callback) {
+                    if (this._stopSpeakingHooks) {
+                        this._stopSpeakingHooks.push(callback);
+                    } else {
+                        this._stopSpeakingHooks = [callback];
+                    }
+                }
+            }
+
+            class CanvasDrawAudio {
+                start({ stream, canvas, barOptions }) {
+                    this._canvas = canvas;
+                    this._barOptions = Object.assign({
+                        barWidth: 15,
+                        barSpacing: 5,
+                        barCount: 10,
+                        barColor: '#712cde',
+                        barMinHeight: 8,
+                    }, barOptions);
+
+                    this._ctx2d = this._canvas.getContext('2d');
+                    this._ctx2d.fillStyle = this._barOptions.barColor;
+
+                    // 创建音频上下文和分析器
+                    this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this._analyser = this._audioContext.createAnalyser();
+                    this._analyser.fftSize = 32;
+
+                    const source = this._audioContext.createMediaStreamSource(stream);
+                    source.connect(this._analyser);
+
+                    const bufferLength = this._analyser.frequencyBinCount;
+                    this._dataArray = new Uint8Array(bufferLength);
+                    this._draw();
+                }
+
+                async stop() {
+                    if (this._animationId) {
+                        cancelAnimationFrame(this._animationId);
+                        this._animationId = null;
+                    }
+                    if (this._ctx2d) {
+                        this._ctx2d.clearRect(0, 0, this._canvas.width, this._canvas.height);
+                        this._ctx2d = null;
+                    }
+                    if (this._audioContext) {
+                        await this._audioContext.close();
+                        this._audioContext = null;
+                    }
+                    this._analyser = null;
+                    this._canvas = null;
+                }
+
+                // 绘制函数
+                _draw() {
+                    this._analyser.getByteFrequencyData(this._dataArray);
+                    this._ctx2d.clearRect(0, 0, this._canvas.width, this._canvas.height);
+
+                    const centerY = this._canvas.height / 2;
+                    const startX = (this._canvas.width - (this._barOptions.barWidth + this._barOptions.barSpacing) * this._barOptions.barCount + this._barOptions.barSpacing) / 2;
+
+                    for (let i = 0; i < this._barOptions.barCount; i++) {
+
+                        let barHeight = (this._dataArray[i * 2] / 255) * this._canvas.height;
+                        barHeight = Math.max(barHeight, this._barOptions.barMinHeight);
+
+                        const x = startX + (this._barOptions.barWidth + this._barOptions.barSpacing) * i;
+                        this._ctx2d.fillRect(x, centerY - barHeight / 2, this._barOptions.barWidth, barHeight);
+                    }
+                    this._animationId = requestAnimationFrame(() => this._draw());
+                }
+            }
+        </script>
+        <script>
+            function clickEle(element) {
+                let event = document.createEvent('Event');
+                event.initEvent('click', true, true);
+                element.dispatchEvent(event);
+            }
+            function enableEle(enable, ...eles) {
+                eles.forEach(ele => ele.disabled = !enable);
+            }
+            function showEle(show, ...eles) {
+                if (show) {
+                    eles.forEach(ele => ele.classList.remove('display-none'));
+                } else {
+                    eles.forEach(ele => ele.classList.add('display-none'));
+                }
+            }
+
+            function addPlayPauseFun(element) {
+                if (!element) return;
+                element.onplaying = () => element.__isPlaying = true;
+                element.onpause = () => element.__isPlaying = false;
+                element.onended = () => element.__isPlaying = false;
+
+                element._PauseFun = () => {
+                    if (element.played && element.__isPlaying) {
+                        element.pause();
+                    }
+                }
+                element._PlayFun = () => {
+                    if (element.paused && !element.__isPlaying) {
+                        element.play();
+                    }
+                }
+            }
+
+            function setPlaySrc(ele, src, muted) {
+                ele.src = ele.srcObject = null;
+                if (typeof (src) === 'string') {
+                    ele.src = src;
+                } else {
+                    ele.srcObject = src;
+                }
+                ele.muted = muted;
+                ele.load();
+            }
+
+            function showLoading(bottom) {
+                hideLoading();
+                const apploading = document.createElement('div');
+                apploading.classList.add('app-loader');
+                if (bottom) {
+                    apploading.style.bottom = bottom;
+                }
+                document.body.appendChild(apploading);
+            }
+            function hideLoading() {
+                let apploading = document.querySelector('.app-loader');
+                if (apploading) {
+                    apploading.remove();
+                }
+            }
+
+
+
+            let lastCaptureSuccess = false;
+            async function intoRecording() {
+                let app = new MediaRecorderApp();
+                let audioDraw = new CanvasDrawAudio();
+                let speakListen = new SpeakingListener();
+
+                const microphoneCheck = localStorage.getItem('microphone') == '1';
+                const screenCheck = true || localStorage.getItem('screen') == '1';
+                const cameraCheck = localStorage.getItem('camera') == '1';
+                const systemAudioCheck = localStorage.getItem('systemAudio') == '1';
+                const speakTimeout = localStorage.getItem('speakTimeout') ? parseInt(localStorage.getItem('speakTimeout')) : 0;
+
+                const backBtn = document.querySelector('#btn-back');
+                backBtn.onclick = (event) => {
+                    event.preventDefault();
+                    app.discard();
+                    window.location.href = "/online-recorder#quick-start";
+                }
+                if (!microphoneCheck && !screenCheck && !cameraCheck && !systemAudioCheck) {
+                    window.location.href = "/online-recorder#quick-start";
+                    return;
+                }
+
+                const preparePage = document.querySelector('#app-page-prepare');
+                const recordPage = document.querySelector('#app-page-record');
+                const errorMsg = document.querySelector("#error-message");
+
+                const stopBtn = document.querySelector('#btn-stop');
+                const pauseBtn = document.querySelector('#btn-pause');
+                const resumeBtn = document.querySelector('#btn-resume');
+                const downloadBtn = document.querySelector('#btn-download');
+                const discardBtn = document.querySelector('#btn-discard');
+                const retryBtn = document.querySelector('#btn-retry');
+                const seakableCheck = document.querySelector('#chk-seekable');
+                const seakableContainer = document.querySelector('#chk-seekable-container');
+
+                if (!seakableContainer.__has_toolstip) {
+                    tippy('#seekable-toolstip', {
+                        content: "Add the duration attribute to the recorded file.",
+                    });
+                    seakableContainer.__has_toolstip = true;
+                }
+
+                const audioCanvas = document.querySelector('#audio-draw-canvas');
+                const recordTime = document.querySelector('#record-timer .uagb-heading-text');
+
+                const videoPreview = document.querySelector('#video-preview');
+                const audioPreview = document.querySelector('#audio-preview');
+                addPlayPauseFun(videoPreview);
+                addPlayPauseFun(audioPreview);
+
+
+                app.onCaptureBefore(() => {
+                    showEle(false, errorMsg);
+                    videoPreview.controls = false;
+                    if (lastCaptureSuccess && !screenCheck.checked) {
+                        showEle(true, recordPage);
+                        showEle(false, preparePage);
+                    } else {
+                        showEle(false, recordPage);
+                        showEle(true, preparePage);
+                        showLoading("15%");
                     }
                 });
-                this._hark.on('stopped_speaking', () => {
-                    this._timeoutHandle = setTimeout(() => {
-                        if (this._stopSpeakingHooks) {
-                            this._stopSpeakingHooks.forEach(callback => callback());
-                        }
-                    }, timeoutSeconds * 1000);
+                app.onCaptureSuccess((recordStreams) => {
+                    lastCaptureSuccess = true;
+                    hideLoading();
+                    showEle(true, recordPage, stopBtn, pauseBtn, resumeBtn);
+                    enableEle(false, stopBtn, pauseBtn, resumeBtn);
+                    showEle(false, preparePage, downloadBtn, seakableContainer, discardBtn, retryBtn);
+                });
+                app.onCaptureError((errorObj) => {
+                    hideLoading();
+
+                    let errorDevices = [];
+                    if (errorObj.camera) {
+                        errorDevices.push('Camera');
+                    }
+                    if (errorObj.microphone) {
+                        errorDevices.push('Microphone');
+                    }
+                    if (errorObj.screen) {
+                        errorDevices.push('Screen');
+                    }
+                    if (errorObj.systemAudio) {
+                        errorDevices.push('System Audio');
+                    }
+                    showEle(true, errorMsg);
+                    console.log("Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message);
+                });
+                app.onStart(({ isVideo, preview }) => {
+                    enableEle(true, stopBtn, pauseBtn);
+                    enableEle(false, resumeBtn);
+
+                    if (speakTimeout && speakTimeout > 0 && recordStreams.microphone) {
+                        speakListen.listen({
+                            stream: preview,
+                            timeoutSeconds: speakTimeout,
+                        })
+                    }
+
+                    if (isVideo && preview) {
+                        setPlaySrc(videoPreview, preview, true);
+                    }
+                    if (!isVideo && preview) {
+                        audioDraw.start({
+                            stream: preview,
+                            canvas: audioCanvas,
+                        });
+                    }
+                });
+                app.onStop(({ isVideo, blobURL }) => {
+                    showEle(false, stopBtn, pauseBtn, resumeBtn);
+                    showEle(true, downloadBtn, seakableContainer, discardBtn, retryBtn);
+                    seakableCheck.checked = true;
+                    enableEle(true, discardBtn, downloadBtn);
+                    enableEle(false, retryBtn);
+
+                    speakListen.stop()
+                    audioDraw.stop();
+                    if (isVideo) {
+                        videoPreview.controls = true;
+                        setPlaySrc(videoPreview, blobURL, false);
+                    } else {
+                        setPlaySrc(audioPreview, blobURL, false);
+                    }
+                });
+                app.onPause(() => {
+                    enableEle(false, pauseBtn);
+                    enableEle(true, stopBtn, resumeBtn);
+                    videoPreview._PauseFun();
+                });
+                app.onResume(() => {
+                    enableEle(false, resumeBtn);
+                    enableEle(true, stopBtn, pauseBtn);
+                    videoPreview._PlayFun();
+                });
+                app.onUpdateRecordTime((time) => recordTime.innerHTML = time);
+
+                speakListen.onSpeaking(() => {
+                    console.log('speaking');
+                    if (!resumeBtn.disabled) {
+                        DispatchClick(resumeBtn);
+                    }
+                });
+                speakListen.onStopSpeaking(() => {
+                    console.log('stop speaking');
+                    if (!pauseBtn.disabled) {
+                        DispatchClick(pauseBtn);
+                    }
+                });
+
+                stopBtn.onclick = (event) => {
+                    event.preventDefault();
+                    app.stop();
+                }
+                pauseBtn.onclick = (event) => {
+                    event.preventDefault();
+                    app.pause();
+                }
+                resumeBtn.onclick = (event) => {
+                    event.preventDefault();
+                    app.resume();
+                }
+                downloadBtn.onclick = async (event) => {
+                    event.preventDefault();
+                    showLoading();
+                    await app.download(seakableCheck.checked)
+                    hideLoading();
+                };
+                discardBtn.onclick = (event) => {
+                    event.preventDefault();
+                    app.discard();
+                    setPlaySrc(videoPreview, null, true);
+                    setPlaySrc(audioPreview, null, true);
+                    recordTime.innerHTML = "00:00";
+
+                    showEle(true, retryBtn);
+                    enableEle(true, retryBtn);
+                    showEle(false, stopBtn, pauseBtn, resumeBtn, downloadBtn, seakableContainer, discardBtn);
+                };
+                retryBtn.onclick = (event) => {
+                    event.preventDefault();
+                    setTimeout(() => {
+                        intoRecording();
+                    }, 100);
+                }
+
+                await app.start({
+                    captures: {
+                        camera: cameraCheck,
+                        microphone: microphoneCheck,
+                        screen: screenCheck,
+                        systemAudio: systemAudioCheck,
+                    },
                 });
             }
 
-            stop() {
-                if (this._hark) {
-                    this._hark.stop();
-                    this._hark = null;
-                }
-                if (this._timeoutHandle) {
-                    clearTimeout(this._timeoutHandle);
-                    this._timeoutHandle = null;
-                }
-            }
-            onSpeaking(callback) {
-                if (this._speakingHooks) {
-                    this._speakingHooks.push(callback);
-                } else {
-                    this._speakingHooks = [callback];
-                }
-            }
-            onStopSpeaking(callback) {
-                if (this._stopSpeakingHooks) {
-                    this._stopSpeakingHooks.push(callback);
-                } else {
-                    this._stopSpeakingHooks = [callback];
-                }
-            }
-        }
-
-        class CanvasDrawAudio {
-            start({ stream, canvas, barOptions }) {
-                this._canvas = canvas;
-                this._barOptions = Object.assign({
-                    barWidth: 15,
-                    barSpacing: 5,
-                    barCount: 10,
-                    barColor: '#712cde',
-                    barMinHeight: 8,
-                }, barOptions);
-
-                this._ctx2d = this._canvas.getContext('2d');
-                this._ctx2d.fillStyle = this._barOptions.barColor;
-
-                // 创建音频上下文和分析器
-                this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                this._analyser = this._audioContext.createAnalyser();
-                this._analyser.fftSize = 32;
-
-                const source = this._audioContext.createMediaStreamSource(stream);
-                source.connect(this._analyser);
-
-                const bufferLength = this._analyser.frequencyBinCount;
-                this._dataArray = new Uint8Array(bufferLength);
-                this._draw();
-            }
-
-            async stop() {
-                if (this._animationId) {
-                    cancelAnimationFrame(this._animationId);
-                    this._animationId = null;
-                }
-                if (this._ctx2d) {
-                    this._ctx2d.clearRect(0, 0, this._canvas.width, this._canvas.height);
-                    this._ctx2d = null;
-                }
-                if (this._audioContext) {
-                    await this._audioContext.close();
-                    this._audioContext = null;
-                }
-                this._analyser = null;
-                this._canvas = null;
-            }
-
-            // 绘制函数
-            _draw() {
-                this._analyser.getByteFrequencyData(this._dataArray);
-                this._ctx2d.clearRect(0, 0, this._canvas.width, this._canvas.height);
-
-                const centerY = this._canvas.height / 2;
-                const startX = (this._canvas.width - (this._barOptions.barWidth + this._barOptions.barSpacing) * this._barOptions.barCount + this._barOptions.barSpacing) / 2;
-
-                for (let i = 0; i < this._barOptions.barCount; i++) {
-
-                    let barHeight = (this._dataArray[i * 2] / 255) * this._canvas.height;
-                    barHeight = Math.max(barHeight, this._barOptions.barMinHeight);
-
-                    const x = startX + (this._barOptions.barWidth + this._barOptions.barSpacing) * i;
-                    this._ctx2d.fillRect(x, centerY - barHeight / 2, this._barOptions.barWidth, barHeight);
-                }
-                this._animationId = requestAnimationFrame(() => this._draw());
-            }
-        }
-    </script>
-    <script>
-        function clickEle(element) {
-            let event = document.createEvent('Event');
-            event.initEvent('click', true, true);
-            element.dispatchEvent(event);
-        }
-        function enableEle(enable, ...eles) {
-            eles.forEach(ele => ele.disabled = !enable);
-        }
-        function showEle(show, ...eles) {
-            if (show) {
-                eles.forEach(ele => ele.classList.remove('display-none'));
-            } else {
-                eles.forEach(ele => ele.classList.add('display-none'));
-            }
-        }
-
-        function addPlayPauseFun(element) {
-            element.onplaying = () => element.__isPlaying = true;
-            element.onpause = () => element.__isPlaying = false;
-            element.onended = () => element.__isPlaying = false;
-
-            element._PauseFun = () => {
-                if (element.played && element.__isPlaying) {
-                    element.pause();
-                }
-            }
-            element._PlayFun = () => {
-                if (element.paused && !element.__isPlaying) {
-                    element.play();
-                }
-            }
-        }
-
-        function setPlaySrc(ele, src, muted) {
-            ele.src = ele.srcObject = null;
-            if (typeof (src) === 'string') {
-                ele.src = src;
-            } else {
-                ele.srcObject = src;
-            }
-            ele.muted = muted;
-            ele.load();
-        }
-
-        function showLoading(bottom) {
-            hideLoading();
-            const apploading = document.createElement('div');
-            apploading.classList.add('app-loader');
-            if (bottom) {
-                apploading.style.bottom = bottom;
-            }
-            document.body.appendChild(apploading);
-        }
-        function hideLoading() {
-            let apploading = document.querySelector('.app-loader');
-            if (apploading) {
-                apploading.remove();
-            }
-        }
-
-        async function intoRecording() {
-            let app = new MediaRecorderApp();
-            let audioDraw = new CanvasDrawAudio();
-            let speakListen = new SpeakingListener();
-
-            const microphoneCheck = localStorage.getItem('microphone') == '1';
-            const screenCheck = true || localStorage.getItem('screen') == '1';
-            const cameraCheck = localStorage.getItem('camera') == '1';
-            const systemAudioCheck = localStorage.getItem('systemAudio') == '1';
-            const speakTimeout = localStorage.getItem('speakTimeout') ? parseInt(localStorage.getItem('speakTimeout')) : 0;
-
-            const backBtn = document.querySelector('#btn-back');
-            backBtn.onclick = () => {
-                app.discard();
-                window.location.href = "/online-recorder#quick-start";
-            }
-            if (!microphoneCheck && !screenCheck && !cameraCheck && !systemAudioCheck) {
-                clickEle(backBtn);
-                return;
-            }
-
-            const preparePage = document.querySelector('#app-page-prepare');
-            const recordPage = document.querySelector('#app-page-record');
-
-            const stopBtn = document.querySelector('#btn-stop');
-            const pauseBtn = document.querySelector('#btn-pause');
-            const resumeBtn = document.querySelector('#btn-resume');
-            const downloadBtn = document.querySelector('#btn-download');
-            const discardBtn = document.querySelector('#btn-discard');
-            const retryBtn = document.querySelector('#btn-retry');
-            const seakableCheck = document.querySelector('#chk-seekable');
-            const seakableTip = document.querySelector('#tip-seekable');
-
-            const audioCanvas = document.querySelector('#audio-draw-canvas');
-            const recordTime = document.querySelector('#record-timer');
-
-            const videoPreview = document.querySelector('#video-preview');
-            const audioPreview = document.querySelector('#audio-preview');
-            addPlayPauseFun(videoPreview);
-            addPlayPauseFun(audioPreview);
-
-            app.onCaptureBefore(() => {
-                showEle(false, recordPage);
-                showEle(true, preparePage);
-                showLoading("15%");
+            window.addEventListener('DOMContentLoaded', async () => {
+                await intoRecording();
             });
-            app.onCaptureSuccess((recordStreams) => {
-                hideLoading();
-                showEle(true, recordPage, stopBtn, pauseBtn, resumeBtn);
-                showEle(false, preparePage, downloadBtn, seakableCheck, seakableTip, discardBtn, retryBtn);
-                enableEle(false, stopBtn, pauseBtn, resumeBtn);
-            });
-            app.onCaptureError((errorObj) => {
-                hideLoading();
-
-                let errorDevices = [];
-                if (errorObj.camera) {
-                    errorDevices.push('Camera');
-                }
-                if (errorObj.microphone) {
-                    errorDevices.push('Microphone');
-                }
-                if (errorObj.screen) {
-                    errorDevices.push('Screen');
-                }
-                if (errorObj.systemAudio) {
-                    errorDevices.push('System Audio');
-                }
-                const errorMsg = "Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message;
-                console.log(errorMsg);
-            });
-            app.onStart(({ isVideo, preview }) => {
-                enableEle(true, stopBtn, pauseBtn);
-                enableEle(false, resumeBtn);
-
-                if (speakTimeout && speakTimeout > 0 && recordStreams.microphone) {
-                    speakListen.listen({
-                        stream: preview,
-                        timeoutSeconds: speakTimeout,
-                    })
-                }
-
-                if (isVideo && preview) {
-                    setPlaySrc(videoPreview, preview, true);
-                }
-                if (!isVideo && preview) {
-                    audioDraw.start({
-                        stream: preview,
-                        canvas: audioCanvas,
-                    });
-                }
-            });
-            app.onStop(({ isVideo, blobURL }) => {
-                showEle(false, stopBtn, pauseBtn, resumeBtn, seakableTip);
-                showEle(true, downloadBtn, seakableCheck, discardBtn);
-                seakableCheck.checked = false;
-                enableEle(true, discardBtn, downloadBtn);
-
-                speakListen.stop()
-                audioDraw.stop();
-                if (isVideo) {
-                    setPlaySrc(videoPreview, blobURL, false);
-                } else {
-                    setPlaySrc(audioPreview, blobURL, false);
-                }
-            });
-            app.onPause(() => {
-                enableEle(false, pauseBtn);
-                enableEle(true, stopBtn, resumeBtn);
-                videoPreview._PauseFun();
-            });
-            app.onResume(() => {
-                enableEle(false, resumeBtn);
-                enableEle(true, stopBtn, pauseBtn);
-                videoPreview._PlayFun();
-            });
-            app.onUpdateRecordTime((time) => recordTime.innerHTML = time);
-
-            speakListen.onSpeaking(() => {
-                console.log('speaking');
-                if (!resumeBtn.disabled) {
-                    DispatchClick(resumeBtn);
-                }
-            });
-            speakListen.onStopSpeaking(() => {
-                console.log('stop speaking');
-                if (!pauseBtn.disabled) {
-                    DispatchClick(pauseBtn);
-                }
-            });
-
-            stopBtn.onclick = () => app.stop();
-            pauseBtn.onclick = () => app.pause();
-            resumeBtn.onclick = () => app.resume();
-            downloadBtn.onclick = () => app.download(seakableCheck.checked);
-            seakableCheck.onchange = () => {
-                showEle(seakableCheck.checked, seakableTip);
-            }
-            discardBtn.onclick = () => {
-                app.discard();
-                setPlaySrc(videoPreview, null, true);
-                setPlaySrc(audioPreview, null, true);
-
-                recordTime.innerHTML = "00:00";
-
-                showEle(true, retryBtn);
-                showEle(false, stopBtn, pauseBtn, resumeBtn, downloadBtn, seakableTip, seakableCheck, discardBtn);
-                enableEle(true, retryBtn);
-            };
-            retryBtn.onclick = () => {
-                setTimeout(() => {
-                    intoRecording();
-                }, 100);
-            }
-
-            await app.start({
-                captures: {
-                    camera: cameraCheck,
-                    microphone: microphoneCheck,
-                    screen: screenCheck,
-                    systemAudio: systemAudioCheck,
-                },
-            });
-        }
-
-        window.addEventListener('DOMContentLoaded', async () => {
-            await intoRecording();
-        });
-    </script>
+        </script>
 </body>
 
 </html>

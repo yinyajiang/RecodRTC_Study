@@ -215,7 +215,8 @@
                     startBlinkingBorder('#custom-devices-btn-list');
                     return;
                 }
-                window.location.href = "/online-recorder/app";
+                window.history.pushState(null, '', "/online-recorder/app");
+                // window.location.href = "/online-recorder/app";
             }
             const starBtn = document.querySelector('#btn-start a');
             starBtn.addEventListener('click', startFunc)
