@@ -14,9 +14,16 @@ function IsSafari() {
     return window.__isSafari;
 }
 
+function IsFirefox() {
+    return navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
+  }
+
 function DispatchClick(element) {
-    let event = document.createEvent('Event');
-    event.initEvent('click', true, true);
+    const event = new MouseEvent('click', {
+        'view': window,
+        'bubbles': true,
+        'cancelable': true
+      });
     element.dispatchEvent(event);
 }
 
@@ -613,9 +620,17 @@ function enableEle(enable, ...eles) {
 }
 function showEle(show, ...eles) {
     if (show) {
-        eles.forEach(ele => ele.classList.remove('display-none'));
+        eles.forEach(ele => { 
+            if (ele) {
+                ele.classList.remove('display-none')
+            }
+        } );
     } else {
-        eles.forEach(ele => ele.classList.add('display-none'));
+        eles.forEach(ele => { 
+            if (ele) {
+                ele.classList.add('display-none')
+            }
+        });
     }
 }
 
@@ -882,9 +897,7 @@ async function intoRecording() {
     };
     retryBtn.onclick = (event) => {
         event.preventDefault();
-        setTimeout(() => {
-            intoRecording();
-        }, 100);
+        intoRecording();
     }
 
     await app.start({
@@ -897,6 +910,37 @@ async function intoRecording() {
     });
 }
 
+const isRecordScreen = localStorage.getItem('screen') == '1'
+if (isRecordScreen && IsFirefox()) {
+    const confirmPage = document.querySelector('#app-page-confirm');
+    const preparePage = document.querySelector('#app-page-prepare');
+    const recordPage = document.querySelector('#app-page-record');
+    showEle(false, preparePage, recordPage);
+    showEle(true, confirmPage);
+}
+
 window.addEventListener('DOMContentLoaded', async () => {
-    await intoRecording();
+    const confirmPage = document.querySelector('#app-page-confirm');
+    const preparePage = document.querySelector('#app-page-prepare');
+    const recordPage = document.querySelector('#app-page-record');
+
+    if (isRecordScreen && IsFirefox()) {
+        showEle(false, preparePage, recordPage);
+        showEle(true, confirmPage);
+        const backBtn = document.querySelector('#btn-back');
+        backBtn.onclick = (event) => {
+            event.preventDefault();
+            window.location.href = "/online-recorder#quick-start";
+        }
+        document.querySelector('#btn-confirm-start').onclick = async (event) => {
+            event.preventDefault();
+            showEle(true, preparePage);
+            showEle(false, confirmPage, recordPage);
+            await intoRecording();
+        }
+    } else {
+        showEle(true, preparePage);
+        showEle(false, confirmPage, recordPage);
+        await intoRecording();
+    }
 });

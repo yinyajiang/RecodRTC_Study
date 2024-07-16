@@ -11,7 +11,7 @@
         }
 
         .display-none {
-            display: none;
+            display: none !important;
         }
 
         .bg {
@@ -38,14 +38,22 @@
         <input type="checkbox" id="checkbox-screen">Screen</input>
         <input type="checkbox" id="checkbox-system-audio"> System Audio</input>
     </div>
+
+    <div id="firefox-warning" class="display-none">
+        fire无法录制系统声音
+    </div>
+
     <div>advance setting</div>
     <input type="range" id="input-speak-time-out" min="0" max="30" step="1" value="0">监听声音</input> <span
         id="display-speak-timeout-value"></span>
 
     <script>
         function clickElement(element) {
-            let event = document.createEvent('Event');
-            event.initEvent('click', true, true);
+            const event = new MouseEvent('click', {
+                'view': window,
+                'bubbles': true,
+                'cancelable': true
+            });
             element.dispatchEvent(event);
         }
         function startBlinkingBorder(selector) {
@@ -113,6 +121,17 @@
 
             const inputSpeakTimeout = document.querySelector('#input-speak-time-out');
             const displayTimeoutValue = document.querySelector("#display-speak-timeout-value");
+
+            if (navigator.userAgent.toLowerCase().indexOf('firefox') > -1) {
+                systemAudioCheckbox.addEventListener('change', () => {
+                    if (systemAudioCheckbox.checked) {
+                        systemAudioCheckbox.checked = false;
+                        const ele = document.querySelector('#firefox-warning');
+                        ele.classList.remove('display-none');
+                    }
+                });
+            }
+
 
             function removeAllQuickActive() {
                 quickScreenBtn.classList.remove('quick-active');
