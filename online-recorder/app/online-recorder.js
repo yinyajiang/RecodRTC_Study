@@ -225,7 +225,13 @@ class MediaRecorderApp {
         try {
             let streams = [];
             if (captures.screen) {
-                const screen = await this._getDisplayMedia({ video: true, audio: captures.systemAudio });
+                let constraints = {
+                    video: true,
+                    audio: !!captures.systemAudio
+                } 
+                let retryConstraints = captures.systemAudio ? { video: true }: null;
+
+                const screen = await this._getDisplayMedia(constraints, retryConstraints);
                 screen.__info = GetStreamInfo(screen, {
                     width: window.screen.width,
                     height: window.screen.height,
@@ -234,9 +240,9 @@ class MediaRecorderApp {
 
                 streams.screen = screen;
                 streams.isVideo = true;
-                streams.systemAudio = captures.systemAudio;
+                streams.systemAudio = constraints.audio;
                 streams.push(screen);
-
+                captures.systemAudio = constraints.audio;
 
                 const keepStreamActive = document.createElement('video');
                 keepStreamActive.muted = true;
@@ -254,7 +260,13 @@ class MediaRecorderApp {
                 streams.push(systemAudio);
             }
             if (captures.camera) {
-                const camera = await this._getUserMedia({ video: true, audio: captures.microphone });
+                let constraints = {
+                    video: true,
+                    audio: !!captures.microphone
+                } 
+                let retryConstraints = captures.microphone ? { video: true } : null;
+
+                const camera = await this._getUserMedia(constraints, retryConstraints);
 
                 camera.__info = GetStreamInfo(camera, {
                     width: 1920,
@@ -264,8 +276,9 @@ class MediaRecorderApp {
 
                 streams.camera = camera;
                 streams.isVideo = true;
-                streams.microphone = captures.microphone;
+                streams.microphone = constraints.audio;
                 streams.push(camera);
+                captures.microphone = constraints.audio;
             }
             if (!streams.microphone && captures.microphone) {
                 const microphone = await this._getUserMedia({ audio: true })
@@ -318,14 +331,29 @@ class MediaRecorderApp {
         }
     }
 
-    async _getUserMedia(constraints) {
+    async _getUserMedia(constraints, retryConstraints, {noException}) {
         if (typeof navigator.mediaDevices === 'undefined' || !navigator.mediaDevices.getUserMedia) {
             alert('This browser does not supports WebRTC getUserMedia API.');
             throw new Error('getUserMedia is not supported by this browser');
         }
         try {
-            return await navigator.mediaDevices.getUserMedia(constraints);
+            try {
+                return await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (e) {
+                if (retryConstraints) {
+                    console.log("getUserMedia use retryConstraints:" + JSON.stringify(retryConstraints));
+                    const res = await navigator.mediaDevices.getUserMedia(retryConstraints);
+                    constraints.video = !!retryConstraints.video;
+                    constraints.audio = !!retryConstraints.audio;
+                    return res;
+                } else {
+                    throw e;
+                }
+            }
         } catch (e) {
+            if (noException) {
+                return
+            }
             this._callback('captureerror', {
                 error: e,
                 camera: constraints.video,
@@ -335,14 +363,29 @@ class MediaRecorderApp {
         }
     }
 
-    async _getDisplayMedia(constraints) {
+    async _getDisplayMedia(constraints, retryConstraints, {noException}) {
         if (!navigator.getDisplayMedia && !navigator.mediaDevices.getDisplayMedia) {
             alert('This browser does not supports WebRTC getDisplayMedia API.');
             throw new Error('getDisplayMedia is not supported by this browser');
         }
         try {
-            return await navigator.mediaDevices.getDisplayMedia(constraints);
+            try {
+                return await navigator.mediaDevices.getDisplayMedia(constraints);
+            } catch (e) {
+                if (retryConstraints) {
+                    console.log("getDisplayMedia use retryConstraints:" + JSON.stringify(retryConstraints));
+                    const res = await navigator.mediaDevices.getDisplayMedia(retryConstraints);
+                    constraints.video = !!retryConstraints.video;
+                    constraints.audio = !!retryConstraints.audio;
+                    return res;
+                } else {
+                    throw e;
+                }
+            }
         } catch (e) {
+            if (noException) {
+                return;
+            }
             this._callback('captureerror', {
                 error: e,
                 screen: constraints.video,
