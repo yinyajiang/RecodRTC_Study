@@ -53,7 +53,7 @@ function GetStreamInfo(stream, defaultInfo) {
 function CorrectWH({ width, height }, maxW) {
     if (width > maxW) {
         height = Math.floor(height * (maxW / width));
-        width = maxW;
+        width = Math.floor(maxW);
     }
     return { width, height };
 }
@@ -102,6 +102,8 @@ class MediaRecorderApp {
 
         this._recordOptions = {};
         if (this._recordStreams.isVideo) {
+            console.log("record videoinfo:" + JSON.stringify(this._recordStreams.videoInfo));
+
             this._recordOptions = Object.assign(this._recordOptions, {
                 type: 'video',
                 mimeType: 'video/webm',
@@ -277,15 +279,18 @@ class MediaRecorderApp {
                 streams.screen.height = screenWH.height;
                 streams.screen.fullcanvas = true;
 
-                let camera = CorrectWH(streams.camera.__info, streams.screen.width / 3);
-                streams.camera.width = camera.width;
-                streams.camera.height = camera.height;
+                let cameraWH = CorrectWH(streams.camera.__info, Math.min(streams.screen.width * 0.15, 320));
+                streams.camera.width = cameraWH.width;
+                streams.camera.height = cameraWH.height;
+
                 streams.camera.top = streams.screen.height - streams.camera.height;
                 streams.camera.left = streams.screen.width - streams.camera.width;
 
                 streams.videoInfo = {
-                    width: screenWH.width,
-                    height: screenWH.height,
+                    width: streams.screen.width,
+                    height: streams.screen.height,
+                    cameraWidth: streams.camera.width,
+                    cameraHeight: streams.camera.height,
                 }
             } else if (streams.screen) {
                 let { width, height } = CorrectWH(streams.screen.__info, 1920);
@@ -692,6 +697,8 @@ function selectedIcon(selectors) {
 
 
 
+
+
 let lastCaptureSuccess = false;
 async function intoRecording() {
     let app = new MediaRecorderApp();
@@ -714,6 +721,7 @@ async function intoRecording() {
         window.location.href = "/online-recorder#quick-start";
         return;
     }
+    
     selectedIcon([
         microphoneCheck ? "#microphone-icon" : null,
         screenCheck ? "#screen-icon" : null,
