@@ -16,14 +16,14 @@ function IsSafari() {
 
 function IsFirefox() {
     return navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
-  }
+}
 
 function DispatchClick(element) {
     const event = new MouseEvent('click', {
         'view': window,
         'bubbles': true,
         'cancelable': true
-      });
+    });
     element.dispatchEvent(event);
 }
 
@@ -109,7 +109,7 @@ class MediaRecorderApp {
                 mimeType: 'video/webm',
                 video: {
                     width: this._recordStreams.videoInfo.width ? this._recordStreams.videoInfo.width : 1920,
-                    height: this._recordStreams.videoInfo.height ? this._recordStreams.videoInfo.height : 1080, 
+                    height: this._recordStreams.videoInfo.height ? this._recordStreams.videoInfo.height : 1080,
                 },
             });
         } else {
@@ -228,8 +228,8 @@ class MediaRecorderApp {
                 let constraints = {
                     video: true,
                     audio: !!captures.systemAudio
-                } 
-                let retryConstraints = captures.systemAudio ? { video: true }: null;
+                }
+                let retryConstraints = captures.systemAudio ? { video: true } : null;
 
                 const screen = await this._getDisplayMedia(constraints, retryConstraints);
                 screen.__info = GetStreamInfo(screen, {
@@ -255,15 +255,19 @@ class MediaRecorderApp {
                 })
             }
             if (!streams.systemAudio && captures.systemAudio) {
-                const systemAudio = await this._getDisplayMedia({ audio: true });
-                streams.systemAudio = systemAudio;
-                streams.push(systemAudio);
+                const systemAudio = await this._getDisplayMedia({ audio: true }, null, streams.length > 0);
+                if (systemAudio) {
+                    streams.systemAudio = systemAudio;
+                    streams.push(systemAudio);
+                } else {
+                    captures.systemAudio = false;
+                }
             }
             if (captures.camera) {
                 let constraints = {
                     video: true,
                     audio: !!captures.microphone
-                } 
+                }
                 let retryConstraints = captures.microphone ? { video: true } : null;
 
                 const camera = await this._getUserMedia(constraints, retryConstraints);
@@ -281,9 +285,13 @@ class MediaRecorderApp {
                 captures.microphone = constraints.audio;
             }
             if (!streams.microphone && captures.microphone) {
-                const microphone = await this._getUserMedia({ audio: true })
-                streams.microphone = microphone
-                streams.push(microphone);
+                const microphone = await this._getUserMedia({ audio: true }, null, streams.length > 0)
+                if (microphone) {
+                    streams.microphone = microphone
+                    streams.push(microphone);
+                } else {
+                    captures.microphone = false;
+                }
             }
             if (streams.screen && streams.camera) {
                 let screenWH = CorrectWH(streams.screen.__info, 1920);
@@ -331,7 +339,7 @@ class MediaRecorderApp {
         }
     }
 
-    async _getUserMedia(constraints, retryConstraints, {noException}) {
+    async _getUserMedia(constraints, retryConstraints, noException = false) {
         if (typeof navigator.mediaDevices === 'undefined' || !navigator.mediaDevices.getUserMedia) {
             alert('This browser does not supports WebRTC getUserMedia API.');
             throw new Error('getUserMedia is not supported by this browser');
@@ -352,6 +360,7 @@ class MediaRecorderApp {
             }
         } catch (e) {
             if (noException) {
+                console.log("getUserMedia failed, but continue:" + e);
                 return
             }
             this._callback('captureerror', {
@@ -363,7 +372,7 @@ class MediaRecorderApp {
         }
     }
 
-    async _getDisplayMedia(constraints, retryConstraints, {noException}) {
+    async _getDisplayMedia(constraints, retryConstraints, noException = false) {
         if (!navigator.getDisplayMedia && !navigator.mediaDevices.getDisplayMedia) {
             alert('This browser does not supports WebRTC getDisplayMedia API.');
             throw new Error('getDisplayMedia is not supported by this browser');
@@ -384,6 +393,7 @@ class MediaRecorderApp {
             }
         } catch (e) {
             if (noException) {
+                console.log("getDisplayMedia failed, but continue:" + e);
                 return;
             }
             this._callback('captureerror', {
@@ -660,7 +670,7 @@ function clickEle(element) {
         bubbles: true,
         cancelable: true,
         view: window
-      });
+    });
     element.dispatchEvent(event);
 }
 function enableEle(enable, ...eles) {
@@ -668,13 +678,13 @@ function enableEle(enable, ...eles) {
 }
 function showEle(show, ...eles) {
     if (show) {
-        eles.forEach(ele => { 
+        eles.forEach(ele => {
             if (ele) {
                 ele.classList.remove('display-none')
             }
-        } );
+        });
     } else {
-        eles.forEach(ele => { 
+        eles.forEach(ele => {
             if (ele) {
                 ele.classList.add('display-none')
             }
@@ -764,7 +774,7 @@ async function intoRecording() {
         window.location.href = "/online-recorder#quick-start";
         return;
     }
-    
+
     selectedIcon([
         microphoneCheck ? "#microphone-icon" : null,
         screenCheck ? "#screen-icon" : null,
@@ -793,6 +803,16 @@ async function intoRecording() {
         seakableContainer.__has_toolstip = true;
     }
 
+    const recordTimeIcon = document.querySelector('#record-timer');
+    function setRecordIcon(recording) {
+        if (recording) {
+            recordTimeIcon.classList.remove('not-recording-timer');
+            recordTimeIcon.classList.add('recording-timer');
+        } else {
+            recordTimeIcon.classList.remove('recording-timer');
+            recordTimeIcon.classList.add('not-recording-timer');
+        }
+    }
 
     const recordTime = document.querySelector('#record-timer .uagb-heading-text');
 
@@ -804,6 +824,7 @@ async function intoRecording() {
 
 
     app.onCaptureBefore(() => {
+        setRecordIcon(false);
         showEle(false, errorMsg, finishTips);
         videoPreview.controls = false;
         audioPreview.controls = false;
@@ -819,9 +840,9 @@ async function intoRecording() {
     app.onCaptureSuccess((recordStreams) => {
         lastCaptureSuccess = true;
         hideLoading();
-        showEle(true, recordPage, stopBtn, pauseBtn, resumeBtn);
+        showEle(true, recordPage, stopBtn, pauseBtn);
         enableEle(false, stopBtn, pauseBtn, resumeBtn);
-        showEle(false, preparePage, downloadBtn, seakableContainer, discardBtn, retryBtn);
+        showEle(false, preparePage, downloadBtn, seakableContainer, discardBtn, retryBtn, resumeBtn);
 
         if (recordStreams.isVideo) {
             showEle(false, audioPreview);
@@ -829,6 +850,8 @@ async function intoRecording() {
         } else {
             showEle(false, videoPreview);
         }
+
+        setRecordIcon(true);
     });
     app.onCaptureError((errorObj) => {
         hideLoading();
@@ -889,16 +912,28 @@ async function intoRecording() {
             audioPreview.controls = true;
             setPlaySrc(audioPreview, blobURL, false);
         }
+
+        setRecordIcon(false);
     });
     app.onPause(() => {
+        showEle(false, pauseBtn);
+        showEle(true, resumeBtn);
+
         enableEle(false, pauseBtn);
         enableEle(true, stopBtn, resumeBtn);
         videoPreview._PauseFun();
+
+        setRecordIcon(false);
     });
     app.onResume(() => {
+        showEle(false, resumeBtn);
+        showEle(true, pauseBtn);
+
         enableEle(false, resumeBtn);
         enableEle(true, stopBtn, pauseBtn);
         videoPreview._PlayFun();
+
+        setRecordIcon(true);
     });
     app.onUpdateRecordTime((time) => recordTime.innerHTML = time);
 
@@ -941,6 +976,7 @@ async function intoRecording() {
         setPlaySrc(videoPreview, null, true);
         setPlaySrc(audioPreview, null, true);
         recordTime.innerHTML = "00:00";
+        setRecordIcon(false);
 
         showEle(true, retryBtn);
         enableEle(true, retryBtn);
