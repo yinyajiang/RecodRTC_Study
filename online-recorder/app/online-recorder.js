@@ -377,9 +377,22 @@ class MediaRecorderApp {
             alert('This browser does not supports WebRTC getDisplayMedia API.');
             throw new Error('getDisplayMedia is not supported by this browser');
         }
+        let isGetSystemAudioError = false;
         try {
             try {
-                return await navigator.mediaDevices.getDisplayMedia(constraints);
+                let displayStream = await navigator.mediaDevices.getDisplayMedia(constraints);
+                //只要音频
+                if (!constraints.video && !!constraints.audio) {
+                    if (displayStream && displayStream.getAudioTracks().length == 0) {
+                        displayStream.getTracks().forEach(track => {
+                            track.stop();
+                        });
+                        retryConstraints = null;
+                        isGetSystemAudioError = true;
+                        throw new Error('getDisplayMedia only get audio track, but no audio track');
+                    }
+                }
+                return displayStream;
             } catch (e) {
                 if (retryConstraints) {
                     console.log("getDisplayMedia use retryConstraints:" + JSON.stringify(retryConstraints));
@@ -400,6 +413,7 @@ class MediaRecorderApp {
                 error: e,
                 screen: constraints.video,
                 systemAudio: constraints.audio,
+                isGetSystemAudioError: isGetSystemAudioError,
             });
             throw e;
         }
@@ -603,7 +617,8 @@ class SpeakingListener {
 
 class CanvasDrawAudio {
     start({ stream, canvas, barOptions }) {
-        this._canvas = canvas;
+        try {
+            this._canvas = canvas;
         this._barOptions = Object.assign({
             barWidth: 8,
             barSpacing: 10,
@@ -626,6 +641,10 @@ class CanvasDrawAudio {
         const bufferLength = this._analyser.frequencyBinCount;
         this._dataArray = new Uint8Array(bufferLength);
         this._draw();
+        } catch (e) {
+            console.error(e);
+            throw e;
+        }    
     }
 
     async stop() {
@@ -785,6 +804,8 @@ async function intoRecording() {
     const preparePage = document.querySelector('#app-page-prepare');
     const recordPage = document.querySelector('#app-page-record');
     const errorMsg = document.querySelector("#error-message");
+    const systemAudioErrorMsg = document.querySelector("#system-audio-error-message");
+    
     const finishTips = document.querySelector("#finish-tips");
 
     const stopBtn = document.querySelector('#btn-stop');
@@ -825,7 +846,7 @@ async function intoRecording() {
 
     app.onCaptureBefore(() => {
         setRecordIcon(false);
-        showEle(false, errorMsg, finishTips);
+        showEle(false, errorMsg,systemAudioErrorMsg, finishTips);
         videoPreview.controls = false;
         audioPreview.controls = false;
         if (lastCaptureSuccess && !screenCheck.checked) {
@@ -869,7 +890,11 @@ async function intoRecording() {
         if (errorObj.systemAudio) {
             errorDevices.push('System Audio');
         }
-        showEle(true, errorMsg);
+        if (errorObj.isGetSystemAudioError) { 
+            showEle(true, systemAudioErrorMsg);
+        } else {
+            showEle(true, errorMsg);
+        }
         console.log("Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message);
     });
     app.onStart(({ isVideo, preview }) => {
