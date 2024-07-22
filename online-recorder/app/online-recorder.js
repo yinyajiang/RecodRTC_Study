@@ -146,31 +146,17 @@ class MediaRecorderApp {
     }
 
     async download(seekable) {
-        return new Promise((resolve, reject) => {
-            if (!this._recorder) {
-                reject("recorder is not ready yet");
-                return;
-            }
-            let blob = this._recorder.getBlob();
-            if (!blob) {
-                reject("blob is not ready yet");
-                return;
-            };
-            const ext = this._isRecordVideo() ? "webm" : "mp3";
+        try {
+            seekable = seekable && !IsSafari();
+            return await this._download(seekable);
+        } catch (e) {
+            console.log("download seekable fail,try download without seekable:"+ e);
             if (seekable) {
-                getSeekableBlob(blob, (seekableBlob) => {
-                    const blobURL = URL.createObjectURL(seekableBlob);
-                    this._saveURLToDisk(blobURL, ext);
-                    resolve();
-                });
+                return await this._download(false);
             } else {
-                const blobURL = URL.createObjectURL(blob);
-                this._saveURLToDisk(blobURL, ext);
-                resolve();
+                throw e;
             }
-        })
-
-
+        }
     }
 
     pause() {
@@ -195,6 +181,32 @@ class MediaRecorderApp {
             this._recorder.resumeRecording();
             this._startCalculateTime()
         }
+    }
+
+    async _download(seekable) {
+        return new Promise((resolve, reject) => {
+            if (!this._recorder) {
+                reject("recorder is not ready yet");
+                return;
+            }
+            let blob = this._recorder.getBlob();
+            if (!blob) {
+                reject("blob is not ready yet");
+                return;
+            };
+            const ext = this._isRecordVideo() ? "webm" : "mp3";
+            if (seekable) {
+                getSeekableBlob(blob, (seekableBlob) => {
+                    const blobURL = URL.createObjectURL(seekableBlob);
+                    this._saveURLToDisk(blobURL, ext);
+                    resolve();
+                });
+            } else {
+                const blobURL = URL.createObjectURL(blob);
+                this._saveURLToDisk(blobURL, ext);
+                resolve();
+            }
+        })
     }
 
     _addHook(event, callback) {
@@ -1023,7 +1035,10 @@ async function intoRecording() {
 }
 
 const isRecordScreen = localStorage.getItem('screen') == '1'
-if (isRecordScreen && IsFirefox()) {
+
+const isNeedConfirm = isRecordScreen && (IsFirefox() || IsSafari());
+
+if (isNeedConfirm) {
     const confirmPage = document.querySelector('#app-page-confirm');
     const preparePage = document.querySelector('#app-page-prepare');
     const recordPage = document.querySelector('#app-page-record');
@@ -1036,7 +1051,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     const preparePage = document.querySelector('#app-page-prepare');
     const recordPage = document.querySelector('#app-page-record');
 
-    if (isRecordScreen && IsFirefox()) {
+    if (isNeedConfirm) {
         showEle(false, preparePage, recordPage);
         showEle(true, confirmPage);
         const backBtn = document.querySelector('#btn-back');
