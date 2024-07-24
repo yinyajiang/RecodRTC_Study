@@ -18,6 +18,26 @@ function IsFirefox() {
     return navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
 }
 
+function SetLocationHref(u) {
+
+    function getURL() {
+        let i = window.location.href.indexOf(".com/")
+        if (i == -1) {
+            return u;
+        }
+        i += ".com/".length;
+        const j = window.location.href.indexOf("/", i)
+        if (j == -1) {
+            return u;
+        }
+        if (j - i < 2 || j - i > 3) {
+            return u;
+        }
+        return "/" + window.location.href.substring(i, j) + u;
+    }
+    window.location.href = getURL();
+}
+
 function DispatchClick(element) {
     const event = new MouseEvent('click', {
         'view': window,
@@ -799,10 +819,10 @@ async function intoRecording() {
     backBtn.onclick = (event) => {
         event.preventDefault();
         app.discard();
-        window.location.href = "/online-recorder#quick-start";
+        SetLocationHref("/online-recorder#quick-start");
     }
     if (!microphoneCheck && !screenCheck && !cameraCheck && !systemAudioCheck) {
-        window.location.href = "/online-recorder#quick-start";
+        SetLocationHref("/online-recorder#quick-start");
         return;
     }
 
@@ -1057,7 +1077,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         const backBtn = document.querySelector('#btn-back');
         backBtn.onclick = (event) => {
             event.preventDefault();
-            window.location.href = "/online-recorder#quick-start";
+            SetLocationHref("/online-recorder#quick-start");
         }
         document.querySelector('#btn-confirm-start').onclick = async (event) => {
             event.preventDefault();

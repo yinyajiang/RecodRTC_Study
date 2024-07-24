@@ -109,6 +109,26 @@
             }, 2000);
         }
 
+        function SetLocationHref(u) {
+
+            function getURL() {
+                let i = window.location.href.indexOf(".com/")
+                if (i == -1) {
+                    return u;
+                }
+                i += ".com/".length;
+                const j = window.location.href.indexOf("/", i)
+                if (j == -1) {
+                    return u;
+                }
+                if (j - i < 2 || j - i > 3) {
+                    return u;
+                }
+                return "/" + window.location.href.substring(i, j) + u;
+            }
+            window.location.href = getURL();
+        }
+
         function settingListenAndInit() {
             const cameraCheckbox = document.querySelector('#checkbox-camera');
             const microphoneCheckbox = document.querySelector('#checkbox-microphone');
@@ -234,7 +254,7 @@
                     startBlinkingBorder('#custom-devices-btn-list');
                     return;
                 }
-                window.location.href = "/online-recorder/app";
+                SetLocationHref("/online-recorder/app");
             }
             const starBtn = document.querySelector('#btn-start a');
             starBtn.addEventListener('click', startFunc)
