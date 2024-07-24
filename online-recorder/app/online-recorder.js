@@ -851,7 +851,7 @@ async function intoRecording() {
 
     if (!seakableContainer.__has_toolstip) {
         tippy('#seekable-toolstip', {
-            content: "Add the duration attribute to the recorded file.",
+            content: "Add the duration attribute to the recorded file.(Safari may not be able to add)",
         });
         seakableContainer.__has_toolstip = true;
     }
@@ -955,7 +955,7 @@ async function intoRecording() {
     app.onStop(({ isVideo, blobURL }) => {
         showEle(false, stopBtn, pauseBtn, resumeBtn);
         showEle(true, downloadBtn, seakableContainer, discardBtn, retryBtn, finishTips);
-        seakableCheck.checked = true;
+        seakableCheck.checked = !IsSafari();
         enableEle(true, downloadBtn, discardBtn, retryBtn);
 
         speakListen.stop()
