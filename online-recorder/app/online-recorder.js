@@ -170,7 +170,7 @@ class MediaRecorderApp {
             seekable = seekable && !IsSafari();
             return await this._download(seekable);
         } catch (e) {
-            console.log("download seekable fail,try download without seekable:"+ e);
+            console.log("download seekable fail,try download without seekable:" + e);
             if (seekable) {
                 return await this._download(false);
             } else {
@@ -651,32 +651,32 @@ class CanvasDrawAudio {
     start({ stream, canvas, barOptions }) {
         try {
             this._canvas = canvas;
-        this._barOptions = Object.assign({
-            barWidth: 8,
-            barSpacing: 10,
-            barCount: 15,
-            barColor: '#ffffff',
-            barMinHeight: 8,
-        }, barOptions);
+            this._barOptions = Object.assign({
+                barWidth: 8,
+                barSpacing: 10,
+                barCount: 15,
+                barColor: '#ffffff',
+                barMinHeight: 8,
+            }, barOptions);
 
-        this._ctx2d = this._canvas.getContext('2d');
-        this._ctx2d.fillStyle = this._barOptions.barColor;
+            this._ctx2d = this._canvas.getContext('2d');
+            this._ctx2d.fillStyle = this._barOptions.barColor;
 
-        // 创建音频上下文和分析器
-        this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        this._analyser = this._audioContext.createAnalyser();
-        this._analyser.fftSize = 32;
+            // 创建音频上下文和分析器
+            this._audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this._analyser = this._audioContext.createAnalyser();
+            this._analyser.fftSize = 32;
 
-        const source = this._audioContext.createMediaStreamSource(stream);
-        source.connect(this._analyser);
+            const source = this._audioContext.createMediaStreamSource(stream);
+            source.connect(this._analyser);
 
-        const bufferLength = this._analyser.frequencyBinCount;
-        this._dataArray = new Uint8Array(bufferLength);
-        this._draw();
+            const bufferLength = this._analyser.frequencyBinCount;
+            this._dataArray = new Uint8Array(bufferLength);
+            this._draw();
         } catch (e) {
             console.error(e);
             throw e;
-        }    
+        }
     }
 
     async stop() {
@@ -819,10 +819,10 @@ async function intoRecording() {
     backBtn.onclick = (event) => {
         event.preventDefault();
         app.discard();
-        SetLocationHref("/online-recorder#quick-start");
+        SetLocationHref("/online-screen-recorder#quick-start");
     }
     if (!microphoneCheck && !screenCheck && !cameraCheck && !systemAudioCheck) {
-        SetLocationHref("/online-recorder#quick-start");
+        SetLocationHref("/online-screen-recorder#quick-start");
         return;
     }
 
@@ -837,7 +837,7 @@ async function intoRecording() {
     const recordPage = document.querySelector('#app-page-record');
     const errorMsg = document.querySelector("#error-message");
     const systemAudioErrorMsg = document.querySelector("#system-audio-error-message");
-    
+
     const finishTips = document.querySelector("#finish-tips");
 
     const stopBtn = document.querySelector('#btn-stop');
@@ -878,7 +878,7 @@ async function intoRecording() {
 
     app.onCaptureBefore(() => {
         setRecordIcon(false);
-        showEle(false, errorMsg,systemAudioErrorMsg, finishTips);
+        showEle(false, errorMsg, systemAudioErrorMsg, finishTips);
         videoPreview.controls = false;
         audioPreview.controls = false;
         if (lastCaptureSuccess && !screenCheck.checked) {
@@ -922,7 +922,7 @@ async function intoRecording() {
         if (errorObj.systemAudio) {
             errorDevices.push('System Audio');
         }
-        if (errorObj.isGetSystemAudioError) { 
+        if (errorObj.isGetSystemAudioError) {
             showEle(true, systemAudioErrorMsg);
         } else {
             showEle(true, errorMsg);
@@ -1077,7 +1077,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         const backBtn = document.querySelector('#btn-back');
         backBtn.onclick = (event) => {
             event.preventDefault();
-            SetLocationHref("/online-recorder#quick-start");
+            SetLocationHref("/online-screen-recorder#quick-start");
         }
         document.querySelector('#btn-confirm-start').onclick = async (event) => {
             event.preventDefault();
