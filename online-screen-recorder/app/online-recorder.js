@@ -144,7 +144,7 @@ class MediaRecorderApp {
         }
 
         this._recordOptions.previewStream = (preview) => {
-            this._callback('start', { isVideo: this._isRecordVideo(), preview });
+            this._callback('start', { isVideo: this._isRecordVideo(), preview, hasSound: captures.systemAudio || captures.microphone });
         };
 
         console.log("record options:" + JSON.stringify(this._recordOptions));
@@ -929,11 +929,11 @@ async function intoRecording() {
         }
         console.log("Cannot capture " + errorDevices.join(' and ') + ". Error: " + errorObj.error.message);
     });
-    app.onStart(({ isVideo, preview }) => {
+    app.onStart(({ isVideo, preview, hasSound }) => {
         enableEle(true, stopBtn, pauseBtn);
         enableEle(false, resumeBtn);
 
-        if (speakTimeout && speakTimeout > 0 && recordStreams.microphone) {
+        if (speakTimeout && speakTimeout > 0 && hasSound) {
             speakListen.listen({
                 stream: preview,
                 timeoutSeconds: speakTimeout,
