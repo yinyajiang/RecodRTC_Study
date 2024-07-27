@@ -243,6 +243,8 @@
             const startFunc = (event) => {
                 event.preventDefault();
 
+                localStorage.setItem('maxScreenWidth', '1920');
+                localStorage.setItem('maxScreenHeight', '1080');
                 localStorage.setItem('microphone', microphoneCheckbox.checked ? '1' : '0');
                 localStorage.setItem('screen', screenCheckbox.checked ? '1' : '0');
                 localStorage.setItem('camera', cameraCheckbox.checked ? '1' : '0');

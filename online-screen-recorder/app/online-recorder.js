@@ -108,11 +108,13 @@ class MediaRecorderApp {
         this._destroy(true);
     }
 
-    async start({ captures }) {
+    async start({ captures, maxWidth, maxHeight }) {
         if (!captures.camera && !captures.microphone && !captures.screen && !captures.systemAudio) {
             console.log('Please select at least one media source to record.');
             return;
         }
+        this._maxWidth = maxWidth ? maxWidth : 1920;
+        this._maxHeight = maxHeight ? maxHeight : 1080;
         this._stop = false;
         this._destroy(false);
 
@@ -128,8 +130,8 @@ class MediaRecorderApp {
                 type: 'video',
                 mimeType: 'video/webm',
                 video: {
-                    width: this._recordStreams.videoInfo.width ? this._recordStreams.videoInfo.width : 1920,
-                    height: this._recordStreams.videoInfo.height ? this._recordStreams.videoInfo.height : 1080,
+                    width: this._recordStreams.videoInfo.width ? this._recordStreams.videoInfo.width : this._maxWidth,
+                    height: this._recordStreams.videoInfo.height ? this._recordStreams.videoInfo.height : this._maxHeight,
                 },
             });
         } else {
@@ -326,7 +328,7 @@ class MediaRecorderApp {
                 }
             }
             if (streams.screen && streams.camera) {
-                let screenWH = CorrectWH(streams.screen.__info, 1920);
+                let screenWH = CorrectWH(streams.screen.__info, this._maxWidth);
 
                 streams.screen.width = screenWH.width;
                 streams.screen.height = screenWH.height;
@@ -346,13 +348,13 @@ class MediaRecorderApp {
                     cameraHeight: streams.camera.height,
                 }
             } else if (streams.screen) {
-                let { width, height } = CorrectWH(streams.screen.__info, 1920);
+                let { width, height } = CorrectWH(streams.screen.__info, this._maxWidth);
                 streams.videoInfo = {
                     width: width,
                     height: height,
                 };
             } else if (streams.camera) {
-                let { width, height } = CorrectWH(streams.camera.__info, 1920);
+                let { width, height } = CorrectWH(streams.camera.__info, this._maxWidth);
                 streams.videoInfo = {
                     width: width,
                     height: height,
@@ -815,6 +817,14 @@ async function intoRecording() {
     const systemAudioCheck = localStorage.getItem('systemAudio') == '1';
     const speakTimeout = localStorage.getItem('speakTimeout') ? parseInt(localStorage.getItem('speakTimeout')) : 0;
 
+    let maxWidth = localStorage.getItem('maxScreenWidth');
+    maxWidth = maxWidth ? parseInt(maxWidth) : 1920;
+    let maxHeight = localStorage.getItem('maxScreenHeight');
+    maxHeight = maxHeight ? parseInt(maxHeight) : 1080;
+
+    console.log(`maxWidth:${maxWidth}, maxHeight:${maxHeight}, speakTimeout:${speakTimeout}`);
+
+
     const backBtn = document.querySelector('#btn-back');
     backBtn.onclick = (event) => {
         event.preventDefault();
@@ -1051,6 +1061,8 @@ async function intoRecording() {
             screen: screenCheck,
             systemAudio: systemAudioCheck,
         },
+        maxWidth: maxWidth,
+        maxHeight: maxHeight,
     });
 }
 
