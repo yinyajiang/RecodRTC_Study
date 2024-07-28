@@ -243,8 +243,31 @@
             const startFunc = (event) => {
                 event.preventDefault();
 
-                localStorage.setItem('maxScreenWidth', '1920');
-                localStorage.setItem('maxScreenHeight', '1080');
+                const maxResolutionEle = document.querySelector('#max-resolution');
+                const maxResolution = maxResolutionEle && maxResolutionEle.textContent ? maxResolutionEle.textContent.toUpperCase() : '1080P';
+                let maxScreenWidth = '';
+                let maxScreenHeight = '';
+                switch (maxResolution) {
+                    case '720P':
+                        maxScreenWidth = '1280';
+                        maxScreenHeight = '720';
+                        break;
+                    case '2K':
+                        maxScreenWidth = '2560';
+                        maxScreenHeight = '1440';
+                        break;
+                    case '4K':
+                        maxScreenWidth = '3840';
+                        maxScreenHeight = '2160';
+                        break;
+                    default:
+                        maxScreenWidth = '1920';
+                        maxScreenHeight = '1080';
+                        break;
+                }
+
+                localStorage.setItem('maxScreenWidth', maxScreenWidth);
+                localStorage.setItem('maxScreenHeight', maxScreenHeight);
                 localStorage.setItem('microphone', microphoneCheckbox.checked ? '1' : '0');
                 localStorage.setItem('screen', screenCheckbox.checked ? '1' : '0');
                 localStorage.setItem('camera', cameraCheckbox.checked ? '1' : '0');
