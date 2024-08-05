@@ -17,6 +17,25 @@
         .bg {
             background: white;
         }
+
+
+
+        .quick-disable .uagb-infobox-margin-wrapper {
+            background-color: #f0f0f0 !important;
+            opacity: 0.6 !important;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .quick-disable .uagb-infobox-margin-wrapper:hover {
+            box-shadow: none !important;
+            transform: none !important;
+        }
+
+        .quick-disable img {
+            filter: grayscale(100%) !important;
+            opacity: 0.5 !important;
+        }
     </style>
 </head>
 
@@ -48,6 +67,13 @@
         id="display-speak-timeout-value"></span>
 
     <script>
+        function IsSafari() {
+            if (typeof window.__isSafari !== 'undefined') {
+                return window.__isSafari;
+            }
+            window.__isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            return window.__isSafari;
+        }
         function clickElement(element) {
             const event = new MouseEvent('click', {
                 'view': window,
@@ -156,7 +182,7 @@
             function removeAllQuickActive() {
                 quickScreenBtn.classList.remove('quick-active');
                 quickCameraBtn.classList.remove('quick-active');
-                quickScreenCameraBtn.classList.remove('quick-active');
+                if (quickScreenCameraBtn) quickScreenCameraBtn.classList.remove('quick-active');
             }
 
 
@@ -164,7 +190,7 @@
             quickScreenBtn.addEventListener('click', () => {
                 quickScreenBtn.classList.add('quick-active');
                 quickCameraBtn.classList.remove('quick-active');
-                quickScreenCameraBtn.classList.remove('quick-active');
+                if (quickScreenCameraBtn) quickScreenCameraBtn.classList.remove('quick-active');
 
                 screenCheckbox.checked = true;
                 cameraCheckbox.checked = false;
@@ -176,7 +202,7 @@
             quickCameraBtn.addEventListener('click', () => {
                 quickCameraBtn.classList.add('quick-active');
                 quickScreenBtn.classList.remove('quick-active');
-                quickScreenCameraBtn.classList.remove('quick-active');
+                if (quickScreenCameraBtn) quickScreenCameraBtn.classList.remove('quick-active');
 
                 cameraCheckbox.checked = true;
                 microphoneCheckbox.checked = true;
@@ -185,23 +211,35 @@
 
                 resetAdvancedSetting();
             })
-            quickScreenCameraBtn.addEventListener('click', () => {
-                quickScreenCameraBtn.classList.add('quick-active');
-                quickScreenBtn.classList.remove('quick-active');
-                quickCameraBtn.classList.remove('quick-active');
+            if (quickScreenCameraBtn && !IsSafari()) {
+                quickScreenCameraBtn.addEventListener('click', () => {
+                    quickScreenCameraBtn.classList.add('quick-active');
+                    quickScreenBtn.classList.remove('quick-active');
+                    quickCameraBtn.classList.remove('quick-active');
 
-                screenCheckbox.checked = true;
-                cameraCheckbox.checked = true;
-                microphoneCheckbox.checked = true;
-                systemAudioCheckbox.checked = false;
+                    screenCheckbox.checked = true;
+                    cameraCheckbox.checked = true;
+                    microphoneCheckbox.checked = true;
+                    systemAudioCheckbox.checked = false;
 
-                resetAdvancedSetting();
-            })
+                    resetAdvancedSetting();
+                })
+            } else if (quickScreenCameraBtn && IsSafari()) {
+                quickScreenCameraBtn.classList.add('quick-disable');
+            }
 
             screenCheckbox.addEventListener('change', () => {
+                if (cameraCheckbox.checked && IsSafari()) {
+                    screenCheckbox.checked = false;
+                    return;
+                }
                 removeAllQuickActive();
             })
             cameraCheckbox.addEventListener('change', () => {
+                if (screenCheckbox.checked && IsSafari()) {
+                    cameraCheckbox.checked = false;
+                    return;
+                }
                 removeAllQuickActive();
             })
             microphoneCheckbox.addEventListener('change', () => {

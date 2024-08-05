@@ -128,12 +128,13 @@ class MediaRecorderApp {
 
             this._recordOptions = Object.assign(this._recordOptions, {
                 type: 'video',
-                mimeType: 'video/webm',
+                mimeType: IsSafari() ? 'video/mp4' : 'video/webm',
                 video: {
                     width: this._recordStreams.videoInfo.width ? this._recordStreams.videoInfo.width : this._maxWidth,
                     height: this._recordStreams.videoInfo.height ? this._recordStreams.videoInfo.height : this._maxHeight,
                 },
             });
+            this._downext = IsSafari() ? "mp4" : "webm";
         } else {
             let audioOptions = {
                 type: 'audio',
@@ -143,6 +144,7 @@ class MediaRecorderApp {
                 audioOptions.numberOfAudioChannels = IsEdge() ? 1 : 2;
             }
             this._recordOptions = Object.assign(this._recordOptions, audioOptions);
+            this._downext = "mp3";
         }
 
         this._recordOptions.previewStream = (preview) => {
@@ -216,16 +218,15 @@ class MediaRecorderApp {
                 reject("blob is not ready yet");
                 return;
             };
-            const ext = this._isRecordVideo() ? "webm" : "mp3";
             if (seekable) {
                 getSeekableBlob(blob, (seekableBlob) => {
                     const blobURL = URL.createObjectURL(seekableBlob);
-                    this._saveURLToDisk(blobURL, ext);
+                    this._saveURLToDisk(blobURL, this._downext);
                     resolve();
                 });
             } else {
                 const blobURL = URL.createObjectURL(blob);
-                this._saveURLToDisk(blobURL, ext);
+                this._saveURLToDisk(blobURL, this._downext);
                 resolve();
             }
         })
